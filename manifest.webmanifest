@@ -1,17 +1,44 @@
 {
-  "name": "Tor — dieta pływaka",
+  "name": "Tor — dziennik pływaka",
   "short_name": "Tor",
-  "description": "Dziennik żywienia dla pływaka: zdjęcie posiłku, kalorie, makro i mikroskładniki.",
+  "description": "Żywienie i trening dla pływaka: zdjęcie posiłku, kalorie, makro i 31 mikroskładników. Wszystko liczone lokalnie na urządzeniu.",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",
+  "display_override": ["standalone", "minimal-ui"],
   "orientation": "portrait",
   "background_color": "#EEF3F8",
   "theme_color": "#EEF3F8",
   "lang": "pl",
+  "dir": "ltr",
+  "categories": ["health", "fitness", "food", "lifestyle"],
+  "prefer_related_applications": false,
   "icons": [
     { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
     { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Zrób zdjęcie posiłku",
+      "short_name": "Zdjęcie",
+      "description": "Rozpoznaj posiłek ze zdjęcia i policz składniki",
+      "url": "./index.html?action=photo",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dodaj trening",
+      "short_name": "Trening",
+      "description": "Zapisz sesję i przelicz cele dnia",
+      "url": "./index.html?action=workout",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "Dolej wodę",
+      "short_name": "Woda",
+      "description": "Dopisz szklankę do nawodnienia",
+      "url": "./index.html?action=water",
+      "icons": [{ "src": "icon-192.png", "sizes": "192x192" }]
+    }
   ]
 }

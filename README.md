@@ -229,3 +229,5 @@ porcji. Aplikacja mówi o tym wprost w miejscach, gdzie pokazuje mikroskładniki
 
 
 
+
+<!-- deploy-retry: 20260806T193201Z -->

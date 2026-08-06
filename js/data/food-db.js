@@ -234,8 +234,15 @@ export function byAppearance(color, tex, { limit = 8, catBias = null } = {}) {
     const [ih, is, iv] = item.color;
     let dh = Math.abs(ih - h);
     if (dh > 180) dh = 360 - dh;                 // hue is circular
-    const dist = (dh / 180) * 1.6 + Math.abs(is - s) * 1.0 + Math.abs(iv - v) * 0.9
-      + Math.abs((item.tex ?? .5) - tex) * 0.7;
+    // Hue is degenerate at low saturation — a pale grain of rice and a pale
+    // shred of coconut can measure 90° apart in hue purely from sensor noise,
+    // even though neither has any real colour to speak of. Scaling the hue
+    // term by how saturated *both* colours are means that noise stops
+    // outweighing the signal that actually separates two pale foods:
+    // texture and brightness.
+    const hueWeight = Math.sqrt(Math.max(0, s) * Math.max(0, is));
+    const dist = (dh / 180) * 1.6 * hueWeight + Math.abs(is - s) * 1.0 + Math.abs(iv - v) * 0.9
+      + Math.abs((item.tex ?? .5) - tex) * 0.9;
     let score = 1 / (1 + dist);
     if (catBias && item.cat === catBias) score *= 1.25;
     if (item.kind === 'dish') score *= 1.1;

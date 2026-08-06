@@ -3,7 +3,8 @@
 Progresywna aplikacja webowa (PWA) do prowadzenia dziennika żywienia i treningu
 dla pływaka trenującego wyczynowo. Rozpoznaje posiłek ze zdjęcia, liczy 31
 składników odżywczych, dopasowuje cele do faktycznie wykonanego treningu i
-działa offline.
+działa offline. Zdjęcie jest skrótem, nie wymogiem — przycisk z ołówkiem obok
+przycisku aparatu dodaje posiłek od razu przez wyszukiwarkę produktów.
 
 **Wszystko dzieje się na urządzeniu.** Zdjęcia i dane nie są nigdzie wysyłane,
 nie ma konta ani serwera. Jedyne zapytanie sieciowe to jednorazowe pobranie
@@ -46,8 +47,8 @@ js/
     store.js          stan aplikacji, migracje, mutatory, kosz
   data/
     nutrients.js      definicje 32 pozycji: normy, jednostki, rola, źródła
-    foods.js          114 produktów, pełny profil na 100 g
-    dishes.js         46 dań jako receptury na produktach
+    foods.js          137 produktów, pełny profil na 100 g
+    dishes.js         62 dania jako receptury na produktach
     food-db.js        wspólne API: wyszukiwanie, porcje, wartości odżywcze
     exercise.js       MET, pot, węglowodany, obciążenie treningowe
   domain/
@@ -101,12 +102,21 @@ zdjęcie ─► dekodowanie i skalowanie      (~40 ms)
    rozpoznawane po podobieństwie kosinusowym, nawet gdy model ogólny się myli.
 3. **Heurystyka** — dopasowanie regionów do bazy produktów po barwie i teksturze,
    z korektą na porę dnia i częstotliwość, z jaką użytkownik je dany posiłek.
-   Pewność jest z założenia ograniczona do 58% — histogram barw nie jest dowodem.
+   Odległość barw uwzględnia, że odcień jest bez znaczenia przy niskim nasyceniu
+   (blady ryż i blada kalafior mierzą się losowo różnym odcieniem mimo że
+   wizualnie oba są po prostu „bezbarwne” — waga odcienia skaluje się więc
+   nasyceniem obu kolorów). Pewność jest z założenia ograniczona do 58% —
+   histogram barw nie jest dowodem.
 4. **Model na urządzeniu** — CLIP (zero-shot) przez `transformers.js`, na WebGPU
-   albo na procesorze. Etykiety pochodzą **wyłącznie z bazy produktów tej
-   aplikacji**, więc model nie może zwrócić czegoś, czego nie umiemy przeliczyć
-   na wartości odżywcze. Dodanie produktu do bazy automatycznie uczy o nim
-   rozpoznawanie — bez trenowania czegokolwiek.
+   albo na procesorze, z promptem `"a photo of {}, a type of food"` — dokładnie
+   ten szablon, który w materiałach OpenAI dla CLIP mierzalnie poprawia trafność
+   na zbiorach typu Food-101. Modelowi pokazywana jest **cała baza produktów**
+   (nie skrócona lista) — wcześniejsza wersja zawężała kandydatów heurystyką,
+   która przy owocach i warzywach systematycznie się myliła, więc model nigdy
+   nie dostawał szansy na poprawną odpowiedź. Etykiety pochodzą **wyłącznie z
+   bazy produktów tej aplikacji**, więc model nie może zwrócić czegoś, czego nie
+   umiemy przeliczyć na wartości odżywcze. Dodanie produktu do bazy automatycznie
+   uczy o nim rozpoznawanie — bez trenowania czegokolwiek.
 
 Jeśli urządzenie nie ma akceleracji, jest offline przed pierwszym pobraniem
 modelu albo użytkownik oszczędza transfer — aplikacja zostaje na trybie

@@ -22,12 +22,15 @@ const MODELS = [
 ];
 
 /**
- * Prompt used for every candidate label. Averaging several phrasings buys a
- * couple of points of top-1 accuracy but multiplies the text-encoder passes,
- * which is the dominant cost with ~50 candidates — not a trade worth making on
- * a phone.
+ * Prompt used for every candidate label — the exact food-domain template from
+ * OpenAI's CLIP prompt-engineering notes for the Food-101 benchmark, which
+ * measurably outperforms a bare "a photo of {}" for this kind of label set.
+ * Averaging several templates buys a little more, but now that every call
+ * scores the full database (~200 candidates, see index.js) rather than a
+ * shortlist, doubling the text-encoder passes for a marginal gain isn't worth
+ * it on a phone.
  */
-const PROMPT = 'a photo of {}';
+const PROMPT = 'a photo of {}, a type of food';
 
 const LOAD_TIMEOUT = 45000;
 const RUN_TIMEOUT = 20000;

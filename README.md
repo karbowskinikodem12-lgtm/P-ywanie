@@ -1,5 +1,6 @@
 # Tor — dziennik pływaka
 
+
 Progresywna aplikacja webowa (PWA) do prowadzenia dziennika żywienia i treningu
 dla pływaka trenującego wyczynowo. Rozpoznaje posiłek ze zdjęcia, liczy 31
 składników odżywczych, dopasowuje cele do faktycznie wykonanego treningu i

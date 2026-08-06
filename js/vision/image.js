@@ -227,7 +227,7 @@ export function describe(canvas) {
  * the analyser propose several components for a mixed plate (meat + rice +
  * vegetables) instead of one averaged blob.
  */
-export function segment(canvas, { grid = 8, maxRegions = 4 } = {}) {
+export function segment(canvas, { grid = 10, maxRegions = 6 } = {}) {
   const ctx = canvas.getContext('2d', { willReadFrequently: true });
   const { width: w, height: h } = canvas;
   const { data } = ctx.getImageData(0, 0, w, h);

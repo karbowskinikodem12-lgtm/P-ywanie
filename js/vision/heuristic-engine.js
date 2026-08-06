@@ -56,7 +56,7 @@ export function analyse(features, seg, ctx = {}) {
     // A large, colourless, smooth region is almost certainly the plate itself
     // rather than a pale food, so it should not out-vote a small vivid one.
     const tableware = region.color[1] < 0.09 && regionTex < 0.4 ? 0.35 : 1;
-    const matches = byAppearance(region.color, regionTex, { limit: 6 });
+    const matches = byAppearance(region.color, regionTex, { limit: 8 });
     for (const m of matches) {
       // Larger regions carry more evidence, but a small vivid one (broccoli
       // next to rice) still needs to register.
@@ -101,7 +101,7 @@ export function analyse(features, seg, ctx = {}) {
   const best = items[0]?.score || 1;
   for (const it of items) it.score = clamp((it.score / best) * 0.58, 0, 0.58);
 
-  return { items: items.slice(0, 12), regions: seg.regions, slot };
+  return { items: items.slice(0, 16), regions: seg.regions, slot };
 }
 
 /**
@@ -122,7 +122,9 @@ export function proposeMeal(ranked, seg) {
 
   const used = new Set([top.id]);
   const components = [];
-  for (let i = 1; i < seg.regions.length && components.length < 3; i++) {
+  // A real plate is routinely protein + starch + two vegetables; three
+  // components was clipping the last one off.
+  for (let i = 1; i < seg.regions.length && components.length < 4; i++) {
     // Components must be single ingredients. A dish already stands for a whole
     // plate, so adding one next to the primary would double-count the meal.
     const forRegion = ranked.items.find((x) => (
@@ -136,12 +138,19 @@ export function proposeMeal(ranked, seg) {
 }
 
 /**
- * Shortlist for the neural stage. Feeding CLIP 150 labels costs a text-encoder
- * pass per label, so the heuristic narrows the field first — the model then
- * only has to discriminate between plausible options, which is both faster
- * and measurably more accurate than a wide-open list.
+ * Shortlist for the neural stage. `wide: true` (the default the app uses) is
+ * the whole database — a few hundred food items costs the text encoder
+ * nothing worth trading correctness for.
+ *
+ * The narrowed form is kept only as a fallback for a hypothetically very
+ * constrained device. Its old version filled remaining slots by walking the
+ * item list in storage order, which is grouped by category — meat and dairy
+ * come first, fruit and vegetables near the end — so on a narrow shortlist
+ * whole categories were silently dropped before the model ever saw them.
+ * This version fills round-robin across categories instead, so a small
+ * shortlist is representative rather than front-loaded.
  */
-export function shortlistFor(ranked, { size = 48, wide = false } = {}) {
+export function shortlistFor(ranked, { size = 48, wide = true } = {}) {
   const all = visionLabels();
   if (wide) return all;
 
@@ -150,15 +159,22 @@ export function shortlistFor(ranked, { size = 48, wide = false } = {}) {
     const item = all.find((x) => x.id === entry.id);
     if (item) picked.set(item.id, item);
   }
-  // Always include a spread of common dishes so the model can escape a bad
-  // heuristic guess rather than being trapped inside it.
+
+  const byCat = new Map();
   for (const item of all) {
-    if (picked.size >= size) break;
-    if (item.kind === 'dish') picked.set(item.id, item);
+    if (!byCat.has(item.cat)) byCat.set(item.cat, []);
+    byCat.get(item.cat).push(item);
   }
-  for (const item of all) {
-    if (picked.size >= size) break;
-    picked.set(item.id, item);
+  const buckets = [...byCat.values()];
+  for (let round = 0; picked.size < size; round++) {
+    let added = false;
+    for (const bucket of buckets) {
+      if (picked.size >= size) break;
+      if (round >= bucket.length) continue;
+      picked.set(bucket[round].id, bucket[round]);
+      added = true;
+    }
+    if (!added) break;
   }
   return [...picked.values()].slice(0, size);
 }

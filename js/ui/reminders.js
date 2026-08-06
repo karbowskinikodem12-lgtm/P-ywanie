@@ -113,7 +113,6 @@ async function scheduleWithTriggers(reg, list) {
           icon: 'icon-192.png',
           badge: 'icon-192.png',
           silent: false,
-          // eslint-disable-next-line no-undef
           showTrigger: new TimestampTrigger(when.getTime()),
           data: { type: r.type, url: './' },
         });
@@ -136,15 +135,14 @@ function fire(reminder) {
         body, tag: reminder.id, icon: 'icon-192.png', badge: 'icon-192.png', data: { url: './' },
       })).catch(() => {});
     } else {
-      // eslint-disable-next-line no-new
-      new Notification(`${meta.emoji} ${meta.name}`, { body, icon: 'icon-192.png' });
+      const n = new Notification(`${meta.emoji} ${meta.name}`, { body, icon: 'icon-192.png' });
+      n.onclick = () => { window.focus(); n.close(); };
     }
   } catch { /* notification blocked mid-session */ }
 }
 
 /** Make the copy useful: reference what the day actually looks like. */
 function contextualBody(type) {
-  const state = store.getState();
   const day = store.getDay();
   if (type === 'water') {
     const drank = (day.water || []).reduce((s, w) => s + w.ml, 0);

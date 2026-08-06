@@ -2,16 +2,17 @@
    "Ty" — profile, goals, reminders, on-device model, data and appearance.
    ========================================================================== */
 
-import { esc, round, fmtVolume, dayKey, WEEKDAYS_SHORT, haptic } from '../../core/utils.js';
+import { esc, fmtVolume, dayKey, WEEKDAYS_SHORT, haptic } from '../../core/utils.js';
 import * as store from '../../core/store.js';
 import * as db from '../../core/db.js';
 import { icon } from '../icons.js';
 import * as sheet from '../sheet.js';
 import { toast, toastOk, toastErr } from '../toast.js';
-import { sectionTitle, statCard, callout, tiles } from '../components.js';
-import { computeTargets, explainTargets, bmr } from '../../domain/targets.js';
+import { sectionTitle, callout, macroTiles } from '../components.js';
+import { explainTargets, bmr } from '../../domain/targets.js';
 import { PHASES } from '../../data/exercise.js';
-import { probe, describeCaps, model } from '../../vision/index.js';
+import { probe, model } from '../../vision/index.js';
+import { deleteWithUndo } from '../undo.js';
 import { recommendEngine, resetProbe } from '../../vision/capabilities.js';
 import { learningStats } from '../../vision/learning.js';
 import { getItem } from '../../data/food-db.js';
@@ -63,12 +64,7 @@ export function render(ctx) {
 
     ${sectionTitle('Cele dnia')}
     <section class="glass pad">
-      ${tiles([
-        { value: Math.round(targets.kcal), label: 'kcal' },
-        { value: Math.round(targets.protein), label: 'białko g' },
-        { value: Math.round(targets.carbs), label: 'węgle g' },
-        { value: Math.round(targets.fat), label: 'tłuszcz g' },
-      ])}
+      ${macroTiles(targets, { decimals: 0 })}
       <div class="tiles tiles-3" style="margin-top:8px">
         <div class="tile"><b class="num">${fmtVolume(targets.water)}</b><span>woda</span></div>
         <div class="tile"><b class="num">${Math.round(targets.fiber)}</b><span>błonnik g</span></div>
@@ -377,9 +373,9 @@ export const actions = {
     toast('Pobieram model…');
     const ok = await model.load({
       caps: c,
-      onProgress: ({ text, progress }) => {
+      onProgress: ({ text }) => {
         const pill = document.querySelector('.engine-pill');
-        if (pill && text) pill.lastChild.textContent = `${text}`;
+        if (pill && text) pill.lastChild.textContent = text;
       },
     });
     if (ok) toastOk(`Model gotowy · ${model.state.device === 'webgpu' ? 'GPU' : 'CPU'}`);
@@ -421,7 +417,7 @@ export const actions = {
     ctx.render();
   },
 
-  'data:export': (ctx) => {
+  'data:export': () => {
     try {
       const blob = new Blob([store.exportState()], { type: 'application/json' });
       const a = document.createElement('a');
@@ -437,7 +433,7 @@ export const actions = {
 
   'data:import': () => document.getElementById('fileImport')?.click(),
 
-  'data:wipe': (ctx) => {
+  'data:wipe': () => {
     sheet.open(`
       <div class="grab"></div>
       <h2>Usunąć wszystko?</h2>
@@ -456,12 +452,6 @@ export const actions = {
   },
 
   'day:clear': (ctx) => {
-    store.clearDay(ctx.key);
-    const trash = ctx.state.trash[ctx.state.trash.length - 1];
-    toast('Dzień wyczyszczony', {
-      actionLabel: 'Cofnij',
-      onAction: () => { store.restoreTrash(trash.id); ctx.render(); },
-    });
-    ctx.render();
+    deleteWithUndo(ctx, { kind: 'day', key: ctx.key, message: 'Dzień wyczyszczony' });
   },
 };

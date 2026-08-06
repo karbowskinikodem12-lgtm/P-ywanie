@@ -2,18 +2,19 @@
    Training view — log sessions and see what they do to the nutrition plan.
    ========================================================================== */
 
-import { esc, clamp, fmtDuration, nowTime, uid, haptic, WEEKDAYS_SHORT, parseKey } from '../../core/utils.js';
+import { esc, clamp, fmtDuration, nowTime, haptic, WEEKDAYS_SHORT, parseKey } from '../../core/utils.js';
 import * as store from '../../core/store.js';
 import { icon } from '../icons.js';
 import * as sheet from '../sheet.js';
-import { toast, toastOk } from '../toast.js';
+import { toastOk } from '../toast.js';
 import { listRow, emptyState, sectionTitle, barChart, statCard, tiles } from '../components.js';
 import {
-  WORKOUT_TYPES, INTENSITIES, getType, getIntensity, burnFor, sweatFor,
+  WORKOUT_TYPES, INTENSITIES, getType, burnFor, sweatFor,
   carbNeedFor, loadFor, describeWorkout, formatDistance, swimPace,
 } from '../../data/exercise.js';
 import { workoutDemand, plannedDailyLoad } from '../../domain/targets.js';
 import { trainingScore } from '../../domain/analysis.js';
+import { deleteWithUndo } from '../undo.js';
 
 export const id = 'training';
 export const title = 'Trening';
@@ -158,6 +159,15 @@ function sessionList(day) {
    Workout editor
    ========================================================================== */
 
+/** The four "what this session costs" tiles, shared by paint and live edits. */
+function effectTiles(draft2) {
+  return `
+    <div class="tile"><b class="num">${draft2.kcal}</b><span>kcal</span></div>
+    <div class="tile"><b class="num">${carbNeedFor(draft2)}</b><span>węgli g</span></div>
+    <div class="tile"><b class="num">${sweatFor(draft2)}</b><span>wody ml</span></div>
+    <div class="tile"><b class="num">${loadFor(draft2)}</b><span>load</span></div>`;
+}
+
 function openEditor(ctx, workout = null) {
   const weight = ctx.state.profile.weight;
   draft = workout
@@ -213,12 +223,7 @@ function openEditor(ctx, workout = null) {
         <textarea id="wNotes" placeholder="np. 8×200 na progu, tętno 165" maxlength="240">${esc(draft.notes || '')}</textarea>
       </div>
 
-      <div class="tiles" id="wTiles">
-        <div class="tile"><b class="num">${draft.kcal}</b><span>kcal</span></div>
-        <div class="tile"><b class="num">${carbNeedFor(draft)}</b><span>węgli g</span></div>
-        <div class="tile"><b class="num">${sweatFor(draft)}</b><span>wody ml</span></div>
-        <div class="tile"><b class="num">${loadFor(draft)}</b><span>load</span></div>
-      </div>
+      <div class="tiles" id="wTiles">${effectTiles(draft)}</div>
 
       <div class="sheet-actions">
         <button class="btn btn-primary" id="wSave">${workout ? 'Zapisz' : 'Dodaj trening'}</button>
@@ -234,13 +239,7 @@ function openEditor(ctx, workout = null) {
     const refreshTiles = () => {
       draft.kcal = burnFor({ ...draft, weight: weightNow });
       const el = document.getElementById('wTiles');
-      if (el) {
-        el.innerHTML = `
-          <div class="tile"><b class="num">${draft.kcal}</b><span>kcal</span></div>
-          <div class="tile"><b class="num">${carbNeedFor(draft)}</b><span>węgli g</span></div>
-          <div class="tile"><b class="num">${sweatFor(draft)}</b><span>wody ml</span></div>
-          <div class="tile"><b class="num">${loadFor(draft)}</b><span>load</span></div>`;
-      }
+      if (el) el.innerHTML = effectTiles(draft);
     };
 
     document.querySelectorAll('[data-wtype]').forEach((b) => b.addEventListener('click', () => {
@@ -295,15 +294,9 @@ function openEditor(ctx, workout = null) {
     });
 
     document.getElementById('wDelete')?.addEventListener('click', () => {
-      store.removeWorkout(workout.id, ctx.key);
       draft = null;
       sheet.close();
-      ctx.render();
-      const trash = ctx.state.trash[ctx.state.trash.length - 1];
-      toast('Trening usunięty', {
-        actionLabel: 'Cofnij',
-        onAction: () => { store.restoreTrash(trash.id); ctx.render(); },
-      });
+      deleteWithUndo(ctx, { kind: 'workout', id: workout.id, key: ctx.key, message: 'Trening usunięty' });
     });
   };
 

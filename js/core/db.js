@@ -107,7 +107,52 @@ export async function del(key) {
   try { localStorage.removeItem(LS_PREFIX + key); } catch { /* ignored */ }
 }
 
-/* ---------------- photos ---------------- */
+/* ---------------- photos & thumbnails ---------------- */
+
+/**
+ * Thumbnails live in the same store under a `t:` prefix rather than inline in
+ * the state. A year of logging is ~1500 meals; at ~2.5 kB per thumbnail that
+ * would add close to 4 MB to a blob we re-serialise on every edit — and would
+ * overflow the 5 MB localStorage fallback outright.
+ *
+ * A small in-memory cache keeps list scrolling free of round-trips.
+ */
+const THUMB_CACHE_MAX = 400;
+const thumbCache = new Map();
+
+const thumbKey = (id) => `t:${id}`;
+
+function cacheThumb(id, value) {
+  if (thumbCache.has(id)) thumbCache.delete(id);
+  thumbCache.set(id, value);
+  if (thumbCache.size > THUMB_CACHE_MAX) {
+    thumbCache.delete(thumbCache.keys().next().value);   // evict oldest
+  }
+  return value;
+}
+
+export async function putThumb(id, dataUrl) {
+  if (!id || !dataUrl) return false;
+  cacheThumb(id, dataUrl);
+  try {
+    await idbRun(STORE_PHOTOS, 'readwrite', (s) => s.put(dataUrl, thumbKey(id)));
+    return true;
+  } catch {
+    return false;   // stays in the memory cache for this session
+  }
+}
+
+/** Synchronous cache hit, so the first paint can fill in what it already has. */
+export const peekThumb = (id) => (id ? thumbCache.get(id) || null : null);
+
+export async function getThumb(id) {
+  if (!id) return null;
+  if (thumbCache.has(id)) return thumbCache.get(id);
+  try {
+    const v = await idbRun(STORE_PHOTOS, 'readonly', (s) => s.get(thumbKey(id)));
+    return v ? cacheThumb(id, v) : null;
+  } catch { return null; }
+}
 
 export async function putPhoto(id, dataUrl) {
   if (!id || !dataUrl) return false;
@@ -129,7 +174,9 @@ export async function getPhoto(id) {
 
 export async function delPhoto(id) {
   if (!id) return;
+  thumbCache.delete(id);
   try { await idbRun(STORE_PHOTOS, 'readwrite', (s) => s.delete(id)); } catch { /* ignored */ }
+  try { await idbRun(STORE_PHOTOS, 'readwrite', (s) => s.delete(thumbKey(id))); } catch { /* ignored */ }
 }
 
 export async function listPhotoIds() {
@@ -137,13 +184,20 @@ export async function listPhotoIds() {
   catch { return []; }
 }
 
-/** Drop photos no longer referenced by any meal. Runs on a slow cadence. */
+/**
+ * Drop images no longer referenced by any meal. Runs on a slow cadence.
+ * `keepIds` must include meals sitting in the trash — otherwise restoring one
+ * would bring back a meal whose photo had already been deleted.
+ */
 export async function prunePhotos(keepIds) {
   const keep = new Set(keepIds);
   const all = await listPhotoIds();
   let removed = 0;
-  for (const id of all) {
-    if (!keep.has(id)) { await delPhoto(id); removed++; }
+  for (const key of all) {
+    const id = String(key).startsWith('t:') ? String(key).slice(2) : String(key);
+    if (keep.has(id)) continue;
+    thumbCache.delete(id);
+    try { await idbRun(STORE_PHOTOS, 'readwrite', (s) => s.delete(key)); removed++; } catch { /* ignored */ }
   }
   return removed;
 }

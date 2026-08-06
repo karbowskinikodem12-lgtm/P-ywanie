@@ -21,8 +21,10 @@
 
   --text: #12212E;
   --text-2: #47535F;
-  --sub: #77828D;
-  --faint: #A3ACB6;
+  /* --sub carries 13-15 px body copy, so it has to clear WCAG AA 4.5:1
+     against --bg (#EEF3F8). #77828D measured 3.51:1 and failed. */
+  --sub: #66707C;
+  --faint: #79838F;
   --sep: rgba(60, 60, 67, .12);
   --track: rgba(120, 140, 160, .18);
   --track-strong: rgba(120, 140, 160, .30);
@@ -235,7 +237,12 @@ p { margin: 0; }
   align-items: baseline;
   gap: 10px;
 }
-.section-title button { font-size: 13px; font-weight: 600; color: var(--blue); }
+.section-title button {
+  font-size: 13px; font-weight: 600; color: var(--blue);
+  /* Small text link, full-size tap target: the padding is pulled back out with
+     negative margin so the visual rhythm is unchanged. */
+  padding: 15px 10px; margin: -15px -10px;
+}
 
 /* ---------- accessibility ---------- */
 .sr-only {

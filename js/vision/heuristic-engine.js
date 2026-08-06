@@ -108,7 +108,7 @@ export function analyse(features, seg, ctx = {}) {
  * Turn the ranked list into a proposed meal: a primary item plus, when the
  * photo clearly shows several components, the best match for each region.
  */
-export function proposeMeal(ranked, seg, features) {
+export function proposeMeal(ranked, seg) {
   const top = ranked.items[0];
   if (!top) return { primary: null, components: [] };
 

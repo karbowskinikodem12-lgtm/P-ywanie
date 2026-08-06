@@ -10,7 +10,7 @@
 .app-header .eyebrow { font-size: 13px; color: var(--sub); margin-bottom: 2px; font-weight: 500; }
 .app-header .sub { font-size: 14px; color: var(--sub); margin-top: 1px; }
 .avatar {
-  width: 38px; height: 38px; border-radius: 50%; flex: none;
+  width: 44px; height: 44px; border-radius: 50%; flex: none;
   display: grid; place-items: center;
   font-size: 15px; font-weight: 600; color: #fff;
   background: var(--grad-primary);
@@ -266,7 +266,7 @@
 }
 .cal-strip::-webkit-scrollbar { display: none; }
 .cal-day {
-  flex: none; width: 52px; padding: 9px 0 8px; border-radius: 16px;
+  flex: none; width: 52px; min-height: 62px; padding: 9px 0 8px; border-radius: 16px;
   background: var(--card); border: .5px solid var(--edge);
   text-align: center; scroll-snap-align: center;
   transition: transform var(--dur-fast) var(--ease), background var(--dur);

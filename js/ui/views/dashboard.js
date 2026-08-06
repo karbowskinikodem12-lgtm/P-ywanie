@@ -2,15 +2,13 @@
    Dashboard — everything about today on one screen.
    ========================================================================== */
 
-import { esc, clamp, fmtVolume, fmtDuration, haptic } from '../../core/utils.js';
+import { esc, clamp, fmtVolume, haptic } from '../../core/utils.js';
 import * as store from '../../core/store.js';
 import { icon } from '../icons.js';
 import {
-  ring, macroBars, gauge, listRow, thumb, emptyState, sectionTitle, confidenceChip,
+  ring, macroBars, gauge, listRow, thumb, emptyState, sectionTitle, adviceList, workoutRow,
 } from '../components.js';
 import { coachLine, recommendations, microScore, recoveryScore, trainingScore, nutrientIssues } from '../../domain/analysis.js';
-import { getType, getIntensity, describeWorkout } from '../../data/exercise.js';
-import { SLOT_NAMES } from '../../domain/targets.js';
 import { toast } from '../toast.js';
 
 export const id = 'day';
@@ -76,15 +74,7 @@ export function render(ctx) {
 
     ${waterCard(ctx)}
 
-    ${tips.length ? `
-      ${sectionTitle('Na teraz')}
-      <div class="advice">
-        ${tips.map((t) => `
-          <div class="advice-item">
-            <span class="ic">${t.icon}</span>
-            <div><b>${esc(t.title)}</b><div class="fix">${esc(t.fix)}</div></div>
-          </div>`).join('')}
-      </div>` : ''}
+    ${tips.length ? `${sectionTitle('Na teraz')}${adviceList(tips)}` : ''}
 
     ${sectionTitle('Trening', day.workouts.length ? `<button data-action="workout:add">Dodaj</button>` : '')}
     <div class="glass list">${workoutList(day)}</div>
@@ -141,19 +131,9 @@ function workoutList(day) {
       actionLabel: 'Dodaj trening',
     });
   }
-  return day.workouts.map((w) => {
-    const type = getType(w.type);
-    const int = getIntensity(w.intensity);
-    return listRow({
-      media: `<div class="wk-icon" style="background:${type.color}">${icon(type.icon, { size: 24 })}</div>`,
-      title: esc(w.name || type.name),
-      meta: `${esc(describeWorkout(w))}${w.notes ? ` · ${esc(w.notes)}` : ''}`,
-      value: `${Math.round(w.kcal || 0)}`,
-      valueSub: 'kcal',
-      action: 'workout:open',
-      id: w.id,
-    });
-  }).join('');
+  return day.workouts
+    .map((w) => workoutRow(w, { action: 'workout:open', extraMeta: w.notes ? ` · ${esc(w.notes)}` : '' }))
+    .join('');
 }
 
 function mealSummary(day) {
@@ -177,7 +157,7 @@ function mealList(day) {
     .slice()
     .sort((a, b) => (a.time || '').localeCompare(b.time || ''))
     .map((m) => listRow({
-      media: thumb(m.thumb, '🍽️'),
+      media: thumb(m, '🍽️'),
       title: esc(m.name),
       meta: `${esc(m.time || '')} · ${Math.round(m.grams || 0)} g · B ${Math.round(m.totals?.protein || 0)} / W ${Math.round(m.totals?.carbs || 0)} / T ${Math.round(m.totals?.fat || 0)}`,
       value: Math.round(m.totals?.kcal || 0),

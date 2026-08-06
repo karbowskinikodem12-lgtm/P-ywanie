@@ -13,7 +13,7 @@ import { dayKey, uid, merge, clamp, safeParse } from './utils.js';
 import { LEGACY_MAP } from '../data/nutrients.js';
 
 const STATE_KEY = 'state';
-const SCHEMA_VERSION = 3;
+const SCHEMA_VERSION = 4;
 const MAX_DAYS = 400;          // ~13 months of history
 const TRASH_TTL_DAYS = 30;
 const MAX_TRASH = 60;
@@ -204,6 +204,8 @@ function migrate(input) {
     s = merge(structuredCloneSafe(DEFAULT_STATE), s);
     s.version = 3;
   }
+  // v4 moved thumbnails out of the state blob; the copy itself happens in the
+  // background via migrateInlineThumbs() because it needs async storage.
 
   const base = structuredCloneSafe(DEFAULT_STATE);
   const out = merge(base, s);
@@ -235,7 +237,18 @@ function legacyMeal(m, key) {
     source: 'legacy',
     thumb: m.img || null,
     photoId: null,
-    items: [{ name: m.n || 'Posiłek', grams: +m.g || 0, confidence: 0.6, foodId: null }],
+    // The old format stored nutrition but not ingredients. The single synthetic
+    // row carries those numbers with it (`frozenTotals`), so opening the meal in
+    // the editor scales them by weight instead of recomputing from a food id
+    // that does not exist — which would silently zero the record.
+    items: [{
+      name: m.n || 'Posiłek',
+      grams: +m.g || 0,
+      confidence: 0.6,
+      foodId: null,
+      frozenTotals: totals,
+      baseGrams: +m.g || 0,
+    }],
     totals,
   };
 }
@@ -274,12 +287,12 @@ function ensureDay(key) {
 
 export function addMeal(meal, key = dayKey()) {
   const record = { id: uid('m'), ts: Date.now(), source: 'manual', items: [], ...meal, key };
-  commit((s) => { ensureDay(key).meals.push(record); }, 'meal:add');
+  commit(() => { ensureDay(key).meals.push(record); }, 'meal:add');
   return record;
 }
 
 export function updateMeal(id, patch, key = dayKey()) {
-  return commit((s) => {
+  return commit(() => {
     const day = ensureDay(key);
     const i = day.meals.findIndex((m) => m.id === id);
     if (i < 0) return false;
@@ -298,7 +311,7 @@ export function removeMeal(id, key = dayKey()) {
 }
 
 export function moveMeal(id, fromKey, toKey) {
-  return commit((s) => {
+  return commit(() => {
     const from = ensureDay(fromKey);
     const i = from.meals.findIndex((m) => m.id === id);
     if (i < 0) return false;
@@ -384,12 +397,28 @@ export function emptyTrash() {
 
 /* ---------------- profile / settings ---------------- */
 
+/** Guard rails so a fat-fingered field cannot poison every derived number. */
+const PROFILE_LIMITS = {
+  weight: [30, 200], height: [120, 230], age: [10, 90],
+};
+
 export function setProfile(patch) {
-  return commit((s) => { s.profile = { ...s.profile, ...patch }; }, 'profile');
+  const clean = { ...patch };
+  for (const [key, [min, max]] of Object.entries(PROFILE_LIMITS)) {
+    if (clean[key] == null || clean[key] === '') continue;
+    const n = Number(clean[key]);
+    clean[key] = Number.isFinite(n) ? clamp(n, min, max) : undefined;
+    if (clean[key] === undefined) delete clean[key];
+  }
+  if (clean.sex && clean.sex !== 'f') clean.sex = 'm';
+  return commit((s) => { s.profile = { ...s.profile, ...clean }; }, 'profile');
 }
 
 export function setTraining(patch) {
-  return commit((s) => { s.training = { ...s.training, ...patch }; }, 'training');
+  const clean = { ...patch };
+  if (clean.poolHoursWeek != null) clean.poolHoursWeek = clamp(+clean.poolHoursWeek || 0, 0, 40);
+  if (clean.dryHoursWeek != null) clean.dryHoursWeek = clamp(+clean.dryHoursWeek || 0, 0, 25);
+  return commit((s) => { s.training = { ...s.training, ...clean }; }, 'training');
 }
 
 export function setGoals(patch) {
@@ -427,6 +456,58 @@ export function recordPortion(foodId, grams) {
 
 export function recordSignature(sig) {
   return commit((s) => { s.learning.signatures.push(sig); }, 'learning');
+}
+
+/* ---------------- storage housekeeping ---------------- */
+
+/**
+ * Move pre-v4 inline thumbnails into IndexedDB. A year of logging carried
+ * roughly 4 MB of base64 inside the state, which had to be re-serialised on
+ * every single edit. Runs once, in the background, and gives up quietly if
+ * IndexedDB is unavailable (in which case inline thumbs remain correct).
+ */
+export async function migrateInlineThumbs({ batch = 40 } = {}) {
+  let moved = 0;
+  const pending = [];
+  for (const day of Object.values(state.days)) {
+    for (const meal of day.meals || []) {
+      if (meal.thumb) pending.push(meal);
+    }
+  }
+  if (!pending.length) return 0;
+
+  for (const meal of pending) {
+    const id = meal.thumbId || meal.photoId || uid('ph');
+    // Sequential on purpose: this runs once, off the critical path, and keeps
+    // IndexedDB transactions short.
+    const ok = await db.putThumb(id, meal.thumb);
+    if (!ok) return moved;            // storage refused — keep them inline
+    meal.thumbId = id;
+    delete meal.thumb;
+    moved++;
+    if (moved % batch === 0) await new Promise((r) => setTimeout(r, 0));
+  }
+
+  if (moved) {
+    commit(() => {}, 'thumbs:migrated');
+    await flush();
+  }
+  return moved;
+}
+
+/** Every image id still referenced — including meals sitting in the trash. */
+export function referencedPhotoIds() {
+  const ids = new Set();
+  const add = (meal) => {
+    if (meal?.photoId) ids.add(meal.photoId);
+    if (meal?.thumbId) ids.add(meal.thumbId);
+  };
+  for (const day of Object.values(state.days)) (day.meals || []).forEach(add);
+  for (const entry of state.trash) {
+    if (entry.kind === 'meal') add(entry.item);
+    else if (entry.kind === 'day') (entry.item?.meals || []).forEach(add);
+  }
+  return [...ids];
 }
 
 /* ---------------- import / export ---------------- */

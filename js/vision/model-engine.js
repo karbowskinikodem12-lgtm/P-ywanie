@@ -21,12 +21,13 @@ const MODELS = [
   { id: 'Xenova/clip-vit-base-patch16', dtype: 'q8', label: 'CLIP ViT-B/16' },
 ];
 
-/** Prompt templates — averaging a few phrasings is worth ~3-5 points of top-1. */
-const TEMPLATES = [
-  'a photo of {}',
-  'a close-up photo of {} on a plate',
-  'a meal of {}',
-];
+/**
+ * Prompt used for every candidate label. Averaging several phrasings buys a
+ * couple of points of top-1 accuracy but multiplies the text-encoder passes,
+ * which is the dominant cost with ~50 candidates — not a trade worth making on
+ * a phone.
+ */
+const PROMPT = 'a photo of {}';
 
 const LOAD_TIMEOUT = 45000;
 const RUN_TIMEOUT = 20000;
@@ -174,7 +175,7 @@ export async function classify(canvas, candidates, { topK = 6 } = {}) {
   const byPrompt = new Map();
   const prompts = [];
   for (const c of candidates) {
-    const prompt = TEMPLATES[0].replace('{}', c.en);
+    const prompt = PROMPT.replace('{}', c.en);
     prompts.push(prompt);
     byPrompt.set(prompt, c.id);
   }

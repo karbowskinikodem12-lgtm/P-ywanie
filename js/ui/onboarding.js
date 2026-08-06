@@ -5,6 +5,7 @@
 import { $, esc, clamp, haptic } from '../core/utils.js';
 import * as store from '../core/store.js';
 import { icon } from './icons.js';
+import { macroTiles } from './components.js';
 import { computeTargets } from '../domain/targets.js';
 import { emptyDay } from '../core/store.js';
 import { PHASES } from '../data/exercise.js';
@@ -173,12 +174,7 @@ const STEP_RENDERERS = {
       <h1 style="margin-top:10px">Twój plan startowy</h1>
       <p class="lead">Tak wygląda przeciętny dzień treningowy. Każda dopisana sesja przesunie te liczby.</p>
       <section class="glass pad-lg">
-        <div class="tiles">
-          <div class="tile"><b class="num">${Math.round(preview.kcal)}</b><span>kcal</span></div>
-          <div class="tile"><b class="num">${Math.round(preview.protein)}</b><span>białko g</span></div>
-          <div class="tile"><b class="num">${Math.round(preview.carbs)}</b><span>węgle g</span></div>
-          <div class="tile"><b class="num">${Math.round(preview.fat)}</b><span>tłuszcz g</span></div>
-        </div>
+        ${macroTiles(preview, { decimals: 0 })}
         <div class="tiles tiles-2" style="margin-top:8px">
           <div class="tile"><b class="num">${(preview.water / 1000).toFixed(1).replace('.', ',')} l</b><span>woda</span></div>
           <div class="tile"><b class="num">${preview.meta.bmr}</b><span>BMR kcal</span></div>

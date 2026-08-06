@@ -12,7 +12,7 @@
    returned `confidence` drives how loudly the UI asks for a correction.
    ========================================================================== */
 
-import { getItem, suggestPortion } from '../data/food-db.js';
+import { getItem } from '../data/food-db.js';
 import { clamp } from '../core/utils.js';
 
 /** Share of the frame a normally-plated, well-framed meal covers. */
@@ -93,4 +93,3 @@ export function portionRange(foodId, grams) {
   };
 }
 
-export { suggestPortion };

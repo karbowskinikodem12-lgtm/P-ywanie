@@ -3,13 +3,13 @@
    ========================================================================== */
 
 import {
-  $, $$, dayKey, fmtDate, fmtDayLabel, isToday, haptic, debounce, keyRange, clamp, esc,
+  $, $$, dayKey, fmtDate, fmtDayLabel, isToday, haptic, debounce, esc,
 } from './core/utils.js';
 import * as store from './core/store.js';
 import * as db from './core/db.js';
 import { initSheet, open as openSheet, close as closeSheet } from './ui/sheet.js';
 import { initToast, toast, toastOk, toastErr } from './ui/toast.js';
-import { icon } from './ui/icons.js';
+import { hydrateThumbs } from './ui/thumbs.js';
 import { computeTargets } from './domain/targets.js';
 import { dayTotals, buildHistory } from './domain/analysis.js';
 import * as reminders from './ui/reminders.js';
@@ -99,6 +99,7 @@ function paint({ keepScroll = false, focus = null } = {}) {
   }
 
   view.afterRender?.(ctx);
+  hydrateThumbs(host);
 }
 
 function paintHeader() {
@@ -368,22 +369,22 @@ async function boot() {
   requestIdleCallbackSafe(async () => {
     reminders.schedule(store.getState());
     warmUp(store.getState());
+    const moved = await store.migrateInlineThumbs();
+    if (moved) console.info(`[storage] moved ${moved} thumbnails out of the state blob`);
     pruneOrphanPhotos();
   });
 
-  // Rolling over midnight while the app is open should move to the new day.
-  setInterval(() => {
-    if (isToday(selectedKey)) return;
-    if (dayKey() !== selectedKey && scrollMemory.get('__lastDay') !== dayKey()) {
-      scrollMemory.set('__lastDay', dayKey());
-    }
-  }, 60000);
-
+  // The app is typically left open overnight. When it comes back to the
+  // foreground on a new date, follow the clock — unless the user had
+  // deliberately navigated to some other day.
+  let shownDay = dayKey();
   document.addEventListener('visibilitychange', () => {
     if (document.hidden) return;
-    // Coming back after midnight, or after a reminder, should show today.
-    if (isToday(selectedKey) === false && selectedKey < dayKey()) return;
-    selectedKey = isToday(selectedKey) ? dayKey() : selectedKey;
+    const today = dayKey();
+    if (today !== shownDay) {
+      if (selectedKey === shownDay) selectedKey = today;   // was on "today"
+      shownDay = today;
+    }
     render({ keepScroll: true });
     reminders.schedule(store.getState());
   });
@@ -413,16 +414,11 @@ function handleLaunchAction() {
   });
 }
 
-/** Photos whose meal was deleted are dead weight — clean them up quietly. */
+/** Images whose meal was deleted are dead weight — clean them up quietly. */
 async function pruneOrphanPhotos() {
   try {
-    const state = store.getState();
-    const keep = [];
-    for (const day of Object.values(state.days)) {
-      for (const meal of day.meals || []) if (meal.photoId) keep.push(meal.photoId);
-    }
-    const removed = await db.prunePhotos(keep);
-    if (removed) console.info(`[storage] removed ${removed} orphaned photos`);
+    const removed = await db.prunePhotos(store.referencedPhotoIds());
+    if (removed) console.info(`[storage] removed ${removed} orphaned images`);
   } catch { /* ignored */ }
 }
 

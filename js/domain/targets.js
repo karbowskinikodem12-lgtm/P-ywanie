@@ -12,7 +12,7 @@
    ========================================================================== */
 
 import { NUTRIENTS, NUTRIENT_KEYS, emptyTotals } from '../data/nutrients.js';
-import { burnFor, sweatFor, carbNeedFor, loadFor, getPhase, WORKOUT_INDEX } from '../data/exercise.js';
+import { burnFor, sweatFor, carbNeedFor, loadFor, getPhase } from '../data/exercise.js';
 import { clamp, round } from '../core/utils.js';
 
 /** Resting metabolic rate, kcal/day. */
@@ -32,7 +32,7 @@ const NEAT_FACTOR = 1.35;
  * Used before any session is logged so the target is never "resting only".
  */
 export function plannedTrainingKcal(profile, training) {
-  const weight = +profile.weight || 70;
+  const weight = clamp(+profile.weight || 70, 30, 200);
   const pool = burnFor({ type: 'swim', intensity: 'moderate', minutes: (+training.poolHoursWeek || 0) * 60, weight });
   const dry = burnFor({ type: 'gym', intensity: 'moderate', minutes: (+training.dryHoursWeek || 0) * 60, weight });
   return Math.round((pool + dry) / 7);

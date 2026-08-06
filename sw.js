@@ -11,7 +11,7 @@
    Bump CACHE_VERSION on every release.
    ========================================================================== */
 
-const CACHE_VERSION = 'tor-v2';
+const CACHE_VERSION = 'tor-v3';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const MODEL_CACHE = 'tor-models-v1';
@@ -48,6 +48,8 @@ const SHELL = [
   './js/ui/components.js',
   './js/ui/sheet.js',
   './js/ui/toast.js',
+  './js/ui/thumbs.js',
+  './js/ui/undo.js',
   './js/ui/reminders.js',
   './js/ui/onboarding.js',
   './js/ui/views/dashboard.js',

@@ -3,8 +3,11 @@
    interactivity is wired by delegation on [data-action] in app.js.
    ========================================================================== */
 
-import { esc, clamp, round, fmtNum, fmtKcal, fmtVolume } from '../core/utils.js';
+import { esc, clamp, fmtNum } from '../core/utils.js';
 import { icon } from './icons.js';
+import { peekThumb } from '../core/db.js';
+import { BLANK } from './thumbs.js';
+import { getType, describeWorkout } from '../data/exercise.js';
 
 /* ---------------- progress ring ---------------- */
 
@@ -131,9 +134,24 @@ export function listRow({ media, title, meta, value, valueSub, action = '', id =
     </${action ? 'button' : 'div'}>`;
 }
 
-export const thumb = (src, emoji = '🍽️') => (src
-  ? `<img class="thumb" src="${esc(src)}" alt="" loading="lazy" decoding="async">`
-  : `<div class="thumb-ph" aria-hidden="true">${emoji}</div>`);
+/**
+ * Thumbnail cell for a meal. Renders straight from the memory cache when the
+ * image is already there, otherwise emits a placeholder that `hydrateThumbs`
+ * fills in after paint. `meal.thumb` is the pre-v4 inline form, still honoured
+ * for records that have not been migrated yet.
+ */
+export function thumb(meal, emoji = '🍽️') {
+  const inline = meal?.thumb || null;
+  const id = meal?.thumbId || null;
+  if (inline) return `<img class="thumb" src="${esc(inline)}" alt="" loading="lazy" decoding="async">`;
+  if (id) {
+    const cached = peekThumb(id);
+    return cached
+      ? `<img class="thumb thumb-loaded" src="${cached}" alt="" decoding="async">`
+      : `<img class="thumb" src="${BLANK}" data-thumb-id="${esc(id)}" alt="" decoding="async">`;
+  }
+  return `<div class="thumb-ph" aria-hidden="true">${emoji}</div>`;
+}
 
 export function emptyState({ emoji = '✨', title, text, action = null, actionLabel = '' }) {
   return `
@@ -143,6 +161,47 @@ export function emptyState({ emoji = '✨', title, text, action = null, actionLa
       <span>${esc(text)}</span>
       ${action ? `<button class="btn btn-quiet btn-sm" style="margin:14px auto 0" data-action="${action}">${esc(actionLabel)}</button>` : ''}
     </div>`;
+}
+
+/** The kcal / protein / carbs / fat block, used wherever a total is shown. */
+export function macroTiles(totals, { decimals = 1 } = {}) {
+  const g = (v) => (decimals ? fmtNum(v) : Math.round(v));
+  return tiles([
+    { value: Math.round(totals.kcal || 0), label: 'kcal' },
+    { value: g(totals.protein || 0), label: 'białko g' },
+    { value: g(totals.carbs || 0), label: 'węgle g' },
+    { value: g(totals.fat || 0), label: 'tłuszcz g' },
+  ]);
+}
+
+/** Coaching / recommendation cards. `action` makes each one tappable. */
+export function adviceList(tips, { action = null, keyOf = null } = {}) {
+  if (!tips.length) return '';
+  return `<div class="advice">${tips.map((t) => {
+    const tag = action ? 'button' : 'div';
+    const attrs = action
+      ? ` data-action="${action}"${keyOf ? ` data-key="${esc(keyOf(t))}"` : ''} style="width:100%;text-align:left"`
+      : '';
+    return `
+      <${tag} class="advice-item"${attrs}>
+        <span class="ic">${t.icon}</span>
+        <div><b>${esc(t.title)}</b><div class="fix">${esc(t.fix)}</div></div>
+      </${tag}>`;
+  }).join('')}</div>`;
+}
+
+/** A logged session, rendered identically on every screen that lists one. */
+export function workoutRow(w, { action = null, metaPrefix = '', extraMeta = '', id = null } = {}) {
+  const type = getType(w.type);
+  return listRow({
+    media: `<div class="wk-icon" style="background:${type.color}">${icon(type.icon, { size: 24 })}</div>`,
+    title: esc(w.name || type.name),
+    meta: `${metaPrefix}${esc(describeWorkout(w))}${extraMeta}`,
+    value: Math.round(w.kcal || 0),
+    valueSub: 'kcal',
+    action: action || '',
+    id: action ? (id ?? w.id) : '',
+  });
 }
 
 /* ---------------- charts ---------------- */
@@ -230,5 +289,3 @@ export const spinnerBlock = (text, step = '') => `
     <div class="step" id="progressStep">${esc(step)}</div>
     <div class="progress-line"><i id="progressBar"></i></div>
   </div>`;
-
-export { fmtKcal, fmtVolume, fmtNum, round };

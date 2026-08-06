@@ -344,7 +344,7 @@ export function segment(canvas, { grid = 8, maxRegions = 4 } = {}) {
  * lookups. Stable length (16) so old entries stay comparable.
  */
 export function signatureOf(features) {
-  const [h, s, v] = features.meanHsv;
+  const [, s, v] = features.meanHsv;
   return [
     ...features.hist,                       // 12
     s, v,

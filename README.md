@@ -62,7 +62,13 @@ js/
     portion.js        szacowanie gramatury
     index.js          orkiestracja: natychmiastowy wynik + upgrade modelem
   ui/
-    icons.js, components.js, sheet.js, toast.js, reminders.js, onboarding.js
+    icons.js          zestaw ikon (inline SVG)
+    components.js     karty, paski, kafelki, wykresy, wiersze list
+    sheet.js          panel dolny: gest zsuwania, pułapka focusu, przycisk wstecz
+    toast.js          krótkie potwierdzenia z akcją „Cofnij”
+    thumbs.js         dociąganie miniatur z IndexedDB po renderze
+    undo.js           każde usunięcie przechodzi tą samą, odwracalną ścieżką
+    reminders.js, onboarding.js
     views/            dashboard, analyze, training, micro, history, settings
   app.js              powłoka: routing, delegacja zdarzeń, cykl życia
 ```
@@ -142,11 +148,51 @@ skok obciążenia 7:28) i **trening** (dzisiaj vs plan, tydzień, regularność)
 
 - Zapis: IndexedDB, z awaryjnym localStorage i pamięcią sesji. Widoczne w
   ustawieniach, żeby użytkownik wiedział, gdzie faktycznie leżą jego dane.
-- Zdjęcia pełnowymiarowe trzymane osobno od stanu, miniatury (128 px) w stanie.
-- Historia: do 400 dni. Kosz: 30 dni z możliwością przywrócenia.
+- **Obrazy poza stanem.** Zdjęcia i miniatury leżą w osobnym magazynie
+  IndexedDB, a rekord posiłku trzyma tylko klucz. Rok logowania to około
+  1500 posiłków — miniatury w treści stanu dokładały do niego blisko 4 MB,
+  serializowane przy każdej edycji i przekraczające limit localStorage.
+  Miniatury z wcześniejszej wersji są przenoszone w tle przy starcie.
+- Historia: do 400 dni. Kosz: 30 dni z możliwością przywrócenia — sprzątanie
+  obrazów pomija wszystko, co czeka w koszu.
 - Kopia zapasowa do pliku JSON i odtworzenie z pliku.
 - Dane z poprzedniej, jednoplikowej wersji aplikacji (`localStorage: swim-log`)
-  są migrowane automatycznie przy pierwszym uruchomieniu.
+  są migrowane automatycznie przy pierwszym uruchomieniu. Posiłki z tamtej
+  wersji znają swoje wartości odżywcze, ale nie składniki — niosą je więc ze
+  sobą i skalują wagą zamiast przeliczać od nowa.
+
+---
+
+## Wydajność
+
+Mierzone w Chromium na pełnym roku danych (365 dni, 1460 posiłków, 365 sesji):
+
+| co | wynik |
+|---|---|
+| start do pierwszego rysowania | ~280 ms |
+| stan aplikacji (JSON) | 1,7 MB |
+| render pulpitu / treningu / mikro / profilu | 0,6–1,4 ms |
+| render historii (90 dni, wykresy, wyszukiwarka) | 6 ms |
+| przeliczenie celów na dzień | < 0,1 ms |
+| pamięć JS | ~20 MB |
+| węzłów DOM na ekran | ~260 |
+
+Widoki to czyste funkcje zwracające HTML, więc przerysowanie ekranu jest jedną
+podmianą `innerHTML`; nie ma drzewa komponentów do uzgadniania. Analiza zdjęcia
+liczy cechy na obrazie 192 px, nie na oryginale z aparatu.
+
+---
+
+## Dostępność
+
+- Kontrast tekstu pomocniczego 4,5:1 (WCAG AA) w obu motywach.
+- Wszystkie cele dotknięcia co najmniej 44 pt zgodnie z iOS HIG; wyjątkiem są
+  segmentowane przełączniki (36 pt, tyle co systemowe) i słupki wykresu.
+- Każdy element sterujący ma nazwę dla czytnika ekranu, każde pole — etykietę.
+- Panel dolny: pułapka focusu, zamykanie klawiszem Escape, gestem i przyciskiem
+  wstecz. Gest obsłużony przez Pointer Events, więc działa palcem i myszą.
+- `prefers-reduced-motion` wyłącza animacje, `prefers-contrast` wzmacnia
+  separatory.
 
 ---
 

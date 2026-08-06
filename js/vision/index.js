@@ -81,7 +81,7 @@ export async function analyzePhoto(file, { state, onProgress, onPartial } = {}) 
     priors: learning.priors || {},
     learnedMatches: matches,
   });
-  const proposal = proposeMeal(ranked, seg, features);
+  const proposal = proposeMeal(ranked, seg);
 
   const partial = buildResult({
     ranked, proposal, features, seg, image, signature, learning,
@@ -128,7 +128,7 @@ export async function analyzePhoto(file, { state, onProgress, onPartial } = {}) 
     }).sort((a, b) => b.score - a.score);
 
     const neuralRanked = { ...ranked, items: mergeRanked(fused, ranked.items) };
-    const neuralProposal = proposeMeal(neuralRanked, seg, features);
+    const neuralProposal = proposeMeal(neuralRanked, seg);
 
     const final = buildResult({
       ranked: neuralRanked, proposal: neuralProposal, features, seg, image, signature, learning,

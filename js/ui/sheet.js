@@ -101,45 +101,60 @@ export const isOpen = () => !!current;
 
 /* ---------------- drag to dismiss ---------------- */
 
+/**
+ * Pointer Events rather than touch: the same code then serves finger, mouse
+ * and stylus, and it is testable in a desktop browser.
+ */
 function attachDrag() {
+  const DISMISS_AT = 110;   // px of pull that commits to closing
   let startY = 0;
   let dy = 0;
   let dragging = false;
-  let startedAtTop = true;
+  let pointerId = null;
 
-  const onStart = (e) => {
+  const onDown = (e) => {
     if (!current?.dismissible) return;
-    const t = e.touches ? e.touches[0] : e;
-    // Only start a dismiss drag from the top of the scroll area, otherwise
-    // the gesture belongs to the sheet's own scrolling.
-    startedAtTop = sheet.scrollTop <= 0;
-    startY = t.clientY;
+    // Only start a dismiss drag from the top of the scroll area, otherwise the
+    // gesture belongs to the sheet's own scrolling.
+    if (sheet.scrollTop > 0) return;
+    // Never hijack a drag that starts on a control the user is operating.
+    if (e.target.closest('input[type="range"], input[type="time"], select, textarea')) return;
+
+    pointerId = e.pointerId;
+    startY = e.clientY;
     dy = 0;
     dragging = true;
   };
 
   const onMove = (e) => {
-    if (!dragging || !startedAtTop) return;
-    const t = e.touches ? e.touches[0] : e;
-    dy = t.clientY - startY;
+    if (!dragging || e.pointerId !== pointerId) return;
+    dy = e.clientY - startY;
     if (dy <= 0) { sheet.style.transform = ''; return; }
-    sheet.classList.add('dragging');
+
+    if (!sheet.classList.contains('dragging')) {
+      sheet.classList.add('dragging');
+      // Capture only once we are sure this is a drag, so taps still land.
+      try { sheet.setPointerCapture(pointerId); } catch { /* ignored */ }
+    }
     // Rubber-band: the further you pull, the more resistance.
     sheet.style.transform = `translateY(${dy < 120 ? dy : 120 + (dy - 120) * 0.35}px)`;
     if (e.cancelable) e.preventDefault();
   };
 
-  const onEnd = () => {
-    if (!dragging) return;
+  const onUp = (e) => {
+    if (!dragging || (e.pointerId != null && e.pointerId !== pointerId)) return;
     dragging = false;
     sheet.classList.remove('dragging');
-    if (dy > 110) { haptic('light'); close(); }
+    try { sheet.releasePointerCapture(pointerId); } catch { /* ignored */ }
+    pointerId = null;
+
+    if (dy > DISMISS_AT) { haptic('light'); close(); }
     else sheet.style.transform = '';
     dy = 0;
   };
 
-  sheet.addEventListener('touchstart', onStart, { passive: true });
-  sheet.addEventListener('touchmove', onMove, { passive: false });
-  sheet.addEventListener('touchend', onEnd);
-  sheet.addEventListener('touchcancel', onEnd);
+  sheet.addEventListener('pointerdown', onDown, { passive: true });
+  sheet.addEventListener('pointermove', onMove, { passive: false });
+  sheet.addEventListener('pointerup', onUp);
+  sheet.addEventListener('pointercancel', onUp);
 }

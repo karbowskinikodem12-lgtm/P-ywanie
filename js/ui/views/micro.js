@@ -4,9 +4,8 @@
    ========================================================================== */
 
 import { esc, clamp } from '../../core/utils.js';
-import { icon } from '../icons.js';
 import * as sheet from '../sheet.js';
-import { nutrientRow, sectionTitle, gauge, callout, emptyState } from '../components.js';
+import { nutrientRow, sectionTitle, gauge, callout, emptyState, adviceList } from '../components.js';
 import {
   NUTRIENTS, VITAMIN_KEYS, MINERAL_KEYS, MACRO_KEYS, FAT_KEYS,
 } from '../../data/nutrients.js';
@@ -72,15 +71,7 @@ export function render(ctx) {
       }).join('')}
     </section>
 
-    ${tips.length ? `
-      ${sectionTitle('Co z tym zrobić')}
-      <div class="advice">
-        ${tips.map((t) => `
-          <div class="advice-item">
-            <span class="ic">${t.icon}</span>
-            <div><b>${esc(t.title)}</b><div class="fix">${esc(t.fix)}</div></div>
-          </div>`).join('')}
-      </div>` : ''}
+    ${tips.length ? `${sectionTitle('Co z tym zrobić')}${adviceList(tips)}` : ''}
 
     ${gaps.length ? chronicSection(gaps) : ''}
 

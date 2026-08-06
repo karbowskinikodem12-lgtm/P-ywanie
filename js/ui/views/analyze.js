@@ -7,26 +7,26 @@
    ========================================================================== */
 
 import {
-  $, esc, uid, clamp, round, haptic, nowTime, fmtNum, debounce,
+  $, esc, uid, clamp, haptic, nowTime, debounce,
 } from '../../core/utils.js';
 import * as store from '../../core/store.js';
 import * as db from '../../core/db.js';
 import { icon } from '../icons.js';
 import * as sheet from '../sheet.js';
 import { toast, toastErr, toastOk } from '../toast.js';
-import { spinnerBlock, confidenceChip, emptyState } from '../components.js';
+import { spinnerBlock, confidenceChip, emptyState, macroTiles } from '../components.js';
 import {
-  getItem, searchFoods, totalsForItems, per100, suggestPortion, portionPresets,
-  expandDish, CATEGORIES,
+  getItem, searchFoods, totalsForItems, totalsFor, per100, itemKcal, suggestPortion,
+  portionPresets, expandDish, CATEGORIES,
 } from '../../data/food-db.js';
-import { analyzePhoto, ENGINE_LABELS, model } from '../../vision/index.js';
+import { analyzePhoto, ENGINE_LABELS } from '../../vision/index.js';
 import { estimatePortion } from '../../vision/portion.js';
 import { buildLearningUpdates } from '../../vision/learning.js';
 import { guessSlot } from '../../core/store.js';
+import { deleteWithUndo } from '../undo.js';
 import { SLOT_NAMES } from '../../domain/targets.js';
 
 let session = null;      // the meal currently being composed
-let appCtx = null;       // set on every open so actions can reach the app
 
 const SLOTS = ['breakfast', 'snack', 'lunch', 'dinner'];
 
@@ -35,7 +35,6 @@ const SLOTS = ['breakfast', 'snack', 'lunch', 'dinner'];
    ========================================================================== */
 
 export function startCapture(ctx, { fromGallery = false } = {}) {
-  appCtx = ctx;
   const input = $(fromGallery ? '#filePick' : '#fileCam');
   if (!input) return;
   input.value = '';
@@ -43,7 +42,6 @@ export function startCapture(ctx, { fromGallery = false } = {}) {
 }
 
 export async function handleFile(ctx, file) {
-  appCtx = ctx;
   if (!file) return;
 
   session = {
@@ -230,7 +228,7 @@ function editorHtml() {
         </div>
       </div>` : ''}
 
-    <div class="tiles" id="mealTotals">${totalTiles(totals)}</div>
+    <div id="mealTotals">${totalTiles(totals)}</div>
 
     <div class="sheet-actions">
       <button class="btn btn-primary" data-action="meal:save">${isEdit ? 'Zapisz zmiany' : 'Dodaj do dnia'}</button>
@@ -244,7 +242,8 @@ function editorHtml() {
 
 function ingredientRow(item) {
   const food = getItem(item.foodId);
-  const kcal = Math.round((per100(item.foodId).kcal * item.grams) / 100);
+  const kcal = Math.round(itemKcal(item));
+  const frozen = !!item.frozenTotals;
   const conf = clamp(item.confidence ?? 1, 0, 1);
   const confCls = conf >= 0.7 ? '' : conf >= 0.45 ? 'mid' : 'lo';
   return `
@@ -256,7 +255,7 @@ function ingredientRow(item) {
       </div>
       <div class="kc num">${kcal}<span style="font-size:11px;color:var(--sub)"> kcal</span></div>
       <div class="acts">
-        <button data-action="item:portion" data-uid="${item.uid}" aria-label="Zmień gramaturę ${esc(item.name)}">${icon('scale', { size: 15 })}</button>
+        ${frozen ? '' : `<button data-action="item:portion" data-uid="${item.uid}" aria-label="Zmień gramaturę ${esc(item.name)}">${icon('scale', { size: 15 })}</button>`}
         <button data-action="item:swap" data-uid="${item.uid}" aria-label="Podmień ${esc(item.name)}">${icon('refresh', { size: 15 })}</button>
         <button data-action="item:remove" data-uid="${item.uid}" aria-label="Usuń ${esc(item.name)}">${icon('x', { size: 15 })}</button>
       </div>
@@ -265,13 +264,7 @@ function ingredientRow(item) {
     </div>`;
 }
 
-function totalTiles(totals) {
-  return `
-    <div class="tile"><b class="num">${Math.round(totals.kcal)}</b><span>kcal</span></div>
-    <div class="tile"><b class="num">${round(totals.protein, 1)}</b><span>białko g</span></div>
-    <div class="tile"><b class="num">${round(totals.carbs, 1)}</b><span>węgle g</span></div>
-    <div class="tile"><b class="num">${round(totals.fat, 1)}</b><span>tłuszcz g</span></div>`;
-}
+const totalTiles = (totals) => macroTiles(totals);
 
 const totalGrams = () => session.items.reduce((s, i) => s + (+i.grams || 0), 0);
 
@@ -293,7 +286,7 @@ function wireEditor() {
       const item = session.items.find((x) => x.uid === row.dataset.uid);
       if (!item) return;
       row.querySelector('.gr').textContent = `${Math.round(item.grams)} g`;
-      row.querySelector('.kc').innerHTML = `${Math.round((per100(item.foodId).kcal * item.grams) / 100)}<span style="font-size:11px;color:var(--sub)"> kcal</span>`;
+      row.querySelector('.kc').innerHTML = `${Math.round(itemKcal(item))}<span style="font-size:11px;color:var(--sub)"> kcal</span>`;
     });
   };
 
@@ -312,7 +305,6 @@ function wireEditor() {
  *   category         — initial category filter
  */
 export function openSearch(ctx, { onPick, title = 'Znajdź jedzenie', initial = '' } = {}) {
-  appCtx = ctx;
   const priors = ctx.state.learning.priors || {};
   let category = null;
   let query = initial;
@@ -322,7 +314,8 @@ export function openSearch(ctx, { onPick, title = 'Znajdź jedzenie', initial = 
     <h2>${esc(title)}</h2>
     <div class="search-box" style="margin-top:12px">
       ${icon('search', { size: 17 })}
-      <input id="foodSearch" type="search" inputmode="search" autocomplete="off" placeholder="np. owsianka, kurczak, banan" value="${esc(query)}">
+      <input id="foodSearch" type="search" inputmode="search" autocomplete="off"
+        aria-label="Szukaj produktu lub dania" placeholder="np. owsianka, kurczak, banan" value="${esc(query)}">
     </div>
     <div class="alts" id="catRow">
       <button class="chip chip-tap${category ? '' : ' chip-on'}" data-cat="">Wszystko</button>
@@ -386,7 +379,6 @@ function resultsHtml(query, category, priors) {
    ========================================================================== */
 
 export function openPortion(ctx, { foodId, grams, onConfirm, title = null }) {
-  appCtx = ctx;
   const item = getItem(foodId);
   if (!item) return;
 
@@ -407,7 +399,7 @@ export function openPortion(ctx, { foodId, grams, onConfirm, title = null }) {
       </div>
     </div>
 
-    <div class="tiles" id="pTiles"></div>
+    <div id="pTiles"></div>
 
     <div class="sheet-actions">
       <button class="btn btn-primary" id="pConfirm">Gotowe</button>
@@ -421,12 +413,7 @@ export function openPortion(ctx, { foodId, grams, onConfirm, title = null }) {
   const paint = () => {
     const g = +slider.value;
     label.textContent = `${g} g`;
-    const p = per100(foodId);
-    tilesEl.innerHTML = `
-      <div class="tile"><b class="num">${Math.round((p.kcal * g) / 100)}</b><span>kcal</span></div>
-      <div class="tile"><b class="num">${fmtNum((p.protein * g) / 100)}</b><span>białko g</span></div>
-      <div class="tile"><b class="num">${fmtNum((p.carbs * g) / 100)}</b><span>węgle g</span></div>
-      <div class="tile"><b class="num">${fmtNum((p.fat * g) / 100)}</b><span>tłuszcz g</span></div>`;
+    tilesEl.innerHTML = macroTiles(totalsFor(foodId, g));
   };
   paint();
 
@@ -446,7 +433,6 @@ export function openPortion(ctx, { foodId, grams, onConfirm, title = null }) {
    ========================================================================== */
 
 export function startManual(ctx) {
-  appCtx = ctx;
   openSearch(ctx, {
     title: 'Dodaj posiłek',
     onPick: (item) => {
@@ -486,7 +472,6 @@ export function startManual(ctx) {
    ========================================================================== */
 
 export async function openMeal(ctx, mealId) {
-  appCtx = ctx;
   const meal = ctx.day.meals.find((m) => m.id === mealId);
   if (!meal) return;
 
@@ -498,8 +483,9 @@ export async function openMeal(ctx, mealId) {
     time: meal.time || nowTime(),
     slot: meal.slot || guessSlot(meal.time),
     items: (meal.items || []).map((i) => ({ ...i, uid: uid('it') })),
-    photo: { thumb: meal.thumb, display: meal.thumb },
+    photo: { thumb: meal.thumb || null, display: meal.thumb || null },
     photoId: meal.photoId,
+    thumbId: meal.thumbId || null,
     engine: meal.source,
     confidence: meal.confidence ?? 1,
     alternatives: [],
@@ -514,14 +500,23 @@ export async function openMeal(ctx, mealId) {
   if (!session.items.length) {
     session.items = [{
       uid: uid('it'), foodId: null, name: meal.name, emoji: '🍽️',
-      grams: meal.grams || 0, confidence: 1, source: 'legacy', frozenTotals: meal.totals,
+      grams: meal.grams || 0, confidence: 1, source: 'legacy',
+      frozenTotals: meal.totals, baseGrams: meal.grams || 0,
     }];
   }
 
   sheet.open(editorHtml(), { label: 'Edycja posiłku', onClose: onSheetClosed });
   wireEditor();
 
-  // Full-size photo lives outside the state blob; fetch it lazily.
+  // Images live outside the state blob; fetch them lazily. The thumbnail
+  // arrives first so the sheet is never blank, then the full-size photo.
+  if (meal.thumbId && !meal.thumb) {
+    const t = await db.getThumb(meal.thumbId);
+    if (t && session?.mealId === mealId) {
+      session.photo = { thumb: t, display: session.photo.display || t };
+      renderEditor();
+    }
+  }
   if (meal.photoId) {
     const full = await db.getPhoto(meal.photoId);
     if (full && session?.mealId === mealId) {
@@ -544,7 +539,9 @@ async function saveMeal(ctx) {
   const totals = totalsForItems(session.items);
   const grams = Math.round(totalGrams());
   const items = session.items.map(({ uid: _u, ...rest }) => rest);
-  const photoId = session.photo?.display && !session.photoId ? uid('ph') : session.photoId;
+  const isNewPhoto = !!(session.photo?.display && !session.photoId);
+  const photoId = isNewPhoto ? uid('ph') : session.photoId;
+  const thumbId = photoId || session.thumbId || null;
 
   const record = {
     name: session.name,
@@ -553,7 +550,8 @@ async function saveMeal(ctx) {
     grams,
     items,
     totals,
-    thumb: session.photo?.thumb || null,
+    // Images are keyed, not embedded — see store.migrateInlineThumbs.
+    thumbId,
     photoId: photoId || null,
     source: session.engine || 'manual',
     confidence: session.confidence,
@@ -568,9 +566,12 @@ async function saveMeal(ctx) {
     toastOk('Dodano do dnia');
   }
 
-  // Photos are written after the state so the meal appears instantly.
+  // Images are written after the state so the meal appears instantly.
   if (photoId && session.photo?.display) {
     db.putPhoto(photoId, session.photo.display).catch(() => {});
+  }
+  if (thumbId && session.photo?.thumb) {
+    db.putThumb(thumbId, session.photo.thumb).catch(() => {});
   }
 
   applyLearning();
@@ -619,17 +620,10 @@ export const actions = {
 
   'meal:delete': (ctx) => {
     if (!session?.mealId) return;
-    const id = session.mealId;
-    const key = session.key;
-    store.removeMeal(id, key);
+    const { mealId, key } = session;
     session = null;
     sheet.close();
-    ctx.render();
-    const trash = ctx.state.trash[ctx.state.trash.length - 1];
-    toast('Posiłek usunięty', {
-      actionLabel: 'Cofnij',
-      onAction: () => { store.restoreTrash(trash.id); ctx.render(); },
-    });
+    deleteWithUndo(ctx, { kind: 'meal', id: mealId, key, message: 'Posiłek usunięty' });
   },
 
   'meal:rename': () => {

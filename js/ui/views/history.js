@@ -3,7 +3,7 @@
    ========================================================================== */
 
 import {
-  esc, clamp, round, fmtVolume, fmtDate, fmtDayLabel, dayKey, shiftKey, parseKey,
+  esc, round, fmtVolume, fmtDate, fmtDayLabel, dayKey, shiftKey, parseKey,
   WEEKDAYS_SHORT, normalize, debounce, isoWeek,
 } from '../../core/utils.js';
 import * as store from '../../core/store.js';
@@ -11,11 +11,11 @@ import { icon } from '../icons.js';
 import * as sheet from '../sheet.js';
 import { toast, toastOk } from '../toast.js';
 import {
-  sectionTitle, barChart, sparkline, statCard, listRow, thumb, emptyState, tiles,
+  sectionTitle, barChart, sparkline, statCard, listRow, thumb, emptyState,
+  macroTiles, workoutRow,
 } from '../components.js';
-import { aggregate, trend, dayTotals, microScore, chronicGaps } from '../../domain/analysis.js';
-import { getType, describeWorkout } from '../../data/exercise.js';
-import { NUTRIENTS } from '../../data/nutrients.js';
+import { aggregate, trend, dayTotals, microScore } from '../../domain/analysis.js';
+import { getType } from '../../data/exercise.js';
 
 export const id = 'history';
 export const title = 'Historia';
@@ -78,7 +78,8 @@ export function render(ctx) {
     <section class="glass pad">
       <div class="search-box" style="margin-bottom:10px">
         ${icon('search', { size: 17 })}
-        <input id="histSearch" type="search" placeholder="np. owsianka, kurczak" value="${esc(query)}" autocomplete="off">
+        <input id="histSearch" type="search" aria-label="Szukaj w posiłkach i treningach"
+          placeholder="np. owsianka, kurczak" value="${esc(query)}" autocomplete="off">
       </div>
       <div class="alts">
         ${[['all', 'Wszystko'], ['photo', 'Ze zdjęcia'], ['manual', 'Ręczne'], ['workout', 'Treningi']].map(([id2, label]) =>
@@ -197,7 +198,7 @@ function searchResults(ctx) {
     if (row.kind === 'meal') {
       const m = row.item;
       return listRow({
-        media: thumb(m.thumb, '🍽️'),
+        media: thumb(m, '🍽️'),
         title: esc(m.name),
         meta: `${fmtDayLabel(row.key)} · ${esc(m.time || '')} · ${Math.round(m.grams || 0)} g`,
         value: Math.round(m.totals?.kcal || 0),
@@ -207,15 +208,10 @@ function searchResults(ctx) {
       });
     }
     const w = row.item;
-    const t = getType(w.type);
-    return listRow({
-      media: `<div class="wk-icon" style="background:${t.color}">${icon(t.icon, { size: 24 })}</div>`,
-      title: esc(t.name),
-      meta: `${fmtDayLabel(row.key)} · ${esc(describeWorkout(w))}`,
-      value: Math.round(w.kcal || 0),
-      valueSub: 'kcal',
+    return workoutRow(w, {
       action: 'history:openDay',
       id: row.key,
+      metaPrefix: `${esc(fmtDayLabel(row.key))} · `,
     });
   }).join('');
 }
@@ -255,12 +251,7 @@ function openDay(ctx, key) {
     <h2>${esc(fmtDayLabel(key))}</h2>
     <p class="sheet-sub">${esc(fmtDate(key, { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric' }))}</p>
 
-    ${tiles([
-      { value: Math.round(totals.kcal), label: 'kcal' },
-      { value: Math.round(totals.protein), label: 'białko g' },
-      { value: Math.round(totals.carbs), label: 'węgle g' },
-      { value: Math.round(totals.fat), label: 'tłuszcz g' },
-    ])}
+    ${macroTiles(totals, { decimals: 0 })}
 
     <div class="tiles tiles-3" style="margin-top:8px">
       <div class="tile"><b class="num">${fmtVolume(totals.water)}</b><span>woda</span></div>
@@ -272,7 +263,7 @@ function openDay(ctx, key) {
       <div class="input-label" style="margin-top:16px">Posiłki</div>
       <div class="glass list" style="background:var(--fill);box-shadow:none">
         ${day.meals.map((m) => listRow({
-          media: thumb(m.thumb, '🍽️'),
+          media: thumb(m, '🍽️'),
           title: esc(m.name),
           meta: `${esc(m.time || '')} · ${Math.round(m.grams || 0)} g`,
           value: Math.round(m.totals?.kcal || 0),
@@ -283,16 +274,7 @@ function openDay(ctx, key) {
     ${day?.workouts?.length ? `
       <div class="input-label" style="margin-top:16px">Treningi</div>
       <div class="glass list" style="background:var(--fill);box-shadow:none">
-        ${day.workouts.map((w) => {
-          const t = getType(w.type);
-          return listRow({
-            media: `<div class="wk-icon" style="background:${t.color}">${icon(t.icon, { size: 24 })}</div>`,
-            title: esc(t.name),
-            meta: esc(describeWorkout(w)),
-            value: Math.round(w.kcal || 0),
-            valueSub: 'kcal',
-          });
-        }).join('')}
+        ${day.workouts.map((w) => workoutRow(w)).join('')}
       </div>` : ''}
 
     <div class="sheet-actions">
@@ -308,7 +290,6 @@ export function afterRender(ctx) {
   if (!input) return;
   const onInput = debounce(() => {
     query = input.value;
-    const list = input.closest('.view')?.querySelector('.glass.list');
     ctx.render({ keepScroll: true, focus: 'histSearch' });
   }, 200);
   input.addEventListener('input', onInput);

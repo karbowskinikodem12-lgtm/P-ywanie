@@ -8,7 +8,7 @@
 
 import FOODS, { FOOD_INDEX } from './foods.js';
 import DISHES, { DISH_INDEX } from './dishes.js';
-import { emptyTotals, accumulate, NUTRIENT_KEYS } from './nutrients.js';
+import { emptyTotals, accumulate } from './nutrients.js';
 import { normalize } from '../core/utils.js';
 
 export const ALL_ITEMS = [...FOODS, ...DISHES];
@@ -67,14 +67,36 @@ export function totalsFor(id, grams) {
   return accumulate(t, per100(id), (+grams || 0) / 100);
 }
 
-/** Nutrient totals for a list of {foodId, grams}. */
+/**
+ * Nutrient totals for a list of {foodId, grams}.
+ *
+ * An item may instead carry `frozenTotals` + `baseGrams`: meals imported from
+ * the pre-database version know their nutrition but not their ingredients, so
+ * their figures are scaled by weight rather than recomputed. Without this they
+ * would silently drop to zero the first time the user opened them.
+ */
 export function totalsForItems(items) {
   const t = emptyTotals();
   for (const it of items || []) {
     if (!it || it.hidden) continue;
+    if (it.frozenTotals) {
+      const ratio = it.baseGrams > 0 ? (+it.grams || 0) / it.baseGrams : 1;
+      accumulate(t, it.frozenTotals, ratio);
+      continue;
+    }
     accumulate(t, per100(it.foodId), (+it.grams || 0) / 100);
   }
   return t;
+}
+
+/** Energy of a single item, honouring the frozen-totals form. */
+export function itemKcal(item) {
+  if (!item) return 0;
+  if (item.frozenTotals) {
+    const ratio = item.baseGrams > 0 ? (+item.grams || 0) / item.baseGrams : 1;
+    return (item.frozenTotals.kcal || 0) * ratio;
+  }
+  return (per100(item.foodId).kcal * (+item.grams || 0)) / 100;
 }
 
 /** Break a dish portion down into its ingredients, scaled to `grams`. */

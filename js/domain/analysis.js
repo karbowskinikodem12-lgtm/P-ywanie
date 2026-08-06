@@ -6,11 +6,11 @@
    ========================================================================== */
 
 import {
-  NUTRIENTS, NUTRIENT_KEYS, MICRO_KEYS, VITAMIN_KEYS, MINERAL_KEYS,
+  NUTRIENTS, NUTRIENT_KEYS, MICRO_KEYS,
   emptyTotals, accumulate,
 } from '../data/nutrients.js';
-import { dayLoad, getType } from '../data/exercise.js';
-import { workoutDemand, plannedDailyLoad } from './targets.js';
+import { dayLoad } from '../data/exercise.js';
+import { plannedDailyLoad } from './targets.js';
 import { clamp, round, sum, avg, keyRange } from '../core/utils.js';
 
 /* ---------------- totals ---------------- */
@@ -183,7 +183,7 @@ export function nutrientIssues(totals, targets, { minMeals = 1, mealCount = 0 } 
  * 21:00 after a double session.
  */
 export function recommendations(ctx, limit = 4) {
-  const { totals, targets, day, hour = new Date().getHours(), issues, training } = ctx;
+  const { totals, targets, day, hour = new Date().getHours(), issues } = ctx;
   const out = [];
   const gap = (k) => Math.max(0, (targets[k] || 0) - (totals[k] || 0));
   const pct = (k) => (targets[k] ? (totals[k] / targets[k]) * 100 : 0);
@@ -432,4 +432,3 @@ export function chronicGaps(rows, limit = 5) {
     .slice(0, limit);
 }
 
-export { VITAMIN_KEYS, MINERAL_KEYS, MICRO_KEYS };

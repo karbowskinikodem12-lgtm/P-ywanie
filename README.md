@@ -227,3 +227,5 @@ porcji. Aplikacja mówi o tym wprost w miejscach, gdzie pokazuje mikroskładniki
 
 
 
+
+

@@ -113,9 +113,16 @@ export async function analyzePhoto(file, { state, onProgress, onPartial } = {}) 
     }
 
     report('classify', 0.85, 'Rozpoznaję składniki…');
-    const wide = caps.webgpu === true;
-    const candidates = shortlistFor(ranked, { size: wide ? 90 : 48, wide: false });
-    const neural = await model.classify(image.model, candidates, { topK: 8 });
+    // The whole database is a few hundred items — cheap enough for CLIP to
+    // score in one pass. Narrowing to a heuristic-ranked shortlist used to
+    // run here, but the heuristic is a crude colour/texture match: whenever
+    // it ranked the true answer outside the shortlist (routine for fruit and
+    // vegetables, which dominate the low end of the food list), the model
+    // never got the chance to correct it. The heuristic's opinion still
+    // matters — it boosts agreement in the fusion step below — it just no
+    // longer gets to censor what the model is allowed to see.
+    const candidates = shortlistFor(ranked, { wide: true });
+    const neural = await model.classify(image.model, candidates, { topK: 10 });
     if (!neural.length) throw new Error('Model nie zwrócił wyniku');
 
     // Fuse: the model decides *what*, the heuristic and the personal memory

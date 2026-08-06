@@ -58,6 +58,15 @@ d('cereal_milk', 'Płatki z mlekiem', { en: 'breakfast cereal with milk', emoji:
 d('skyr_shake', 'Shake proteinowy z bananem', { en: 'protein shake smoothie', emoji: '🥤', slot: 'snack', color: [35, .25, .85], tex: .15, tags: ['potreningowe'] },
   [['whey', 30], ['milk', 300], ['banana', 100], ['peanut_butter', 15]]);
 
+d('asparagus_omelette', 'Omlet ze szparagami', { en: 'asparagus omelette', emoji: '🍳', slot: 'breakfast', color: [55, .45, .70], tex: .5 },
+  [['egg', 165], ['asparagus', 100], ['cheese_gouda', 30], ['olive_oil', 5]]);
+
+d('berry_yogurt_bowl', 'Miska jogurtowa z jagodami', { en: 'yogurt bowl with mixed berries', emoji: '🫐', slot: 'breakfast', color: [300, .40, .55], tex: .45 },
+  [['yogurt', 180], ['blackberry', 60], ['blueberry', 60], ['honey', 15]]);
+
+d('citrus_skyr', 'Skyr z grejpfrutem i pomarańczą', { en: 'skyr with grapefruit and orange', emoji: '🍊', slot: 'breakfast', color: [25, .70, .85], tex: .3, tags: ['białko'] },
+  [['skyr', 150], ['grapefruit', 100], ['orange', 80], ['honey', 10]]);
+
 /* ---------------- obiady ---------------- */
 
 d('chicken_rice_veg', 'Kurczak z ryżem i warzywami', { en: 'grilled chicken with rice and vegetables', emoji: '🍛', slot: 'lunch', color: [40, .35, .75], tex: .6, tags: ['klasyk'] },
@@ -129,6 +138,12 @@ d('kebab', 'Kebab', { en: 'doner kebab', emoji: '🌯', slot: 'dinner', color: [
 d('sushi_set', 'Zestaw sushi', { en: 'sushi rolls plate', emoji: '🍣', slot: 'dinner', color: [15, .35, .85], tex: .4 },
   [['rice_white', 220], ['salmon', 90], ['avocado', 40], ['cucumber', 40]]);
 
+d('asparagus_salmon_potatoes', 'Łosoś ze szparagami', { en: 'baked salmon with asparagus and potatoes', emoji: '🐟', slot: 'lunch', color: [30, .40, .65], tex: .5, tags: ['omega3'] },
+  [['salmon', 150], ['asparagus', 150], ['potato', 150], ['olive_oil', 8]]);
+
+d('veggie_hummus_wrap', 'Wrap z hummusem i warzywami', { en: 'hummus and vegetable wrap', emoji: '🌯', slot: 'lunch', color: [60, .35, .75], tex: .45, tags: ['wege'] },
+  [['tortilla', 62], ['hummus', 60], ['arugula', 30], ['radish', 50], ['carrot', 60]]);
+
 /* ---------------- zupy ---------------- */
 
 d('rosol', 'Rosół', { en: 'chicken noodle soup', emoji: '🍜', slot: 'lunch', color: [45, .55, .80], tex: .3, tags: ['klasyk'] },
@@ -142,6 +157,23 @@ d('barszcz', 'Barszcz czerwony', { en: 'beetroot soup borscht', emoji: '🍲', s
 
 d('vegetable_soup', 'Zupa warzywna', { en: 'vegetable soup', emoji: '🍲', slot: 'lunch', color: [45, .50, .65], tex: .35 },
   [['carrot', 70], ['potato', 90], ['peas', 60], ['green_beans', 60], ['parsley', 5]]);
+
+d('pumpkin_soup', 'Zupa dyniowa', { en: 'pumpkin soup', emoji: '🎃', slot: 'lunch', color: [32, .65, .70], tex: .2 },
+  [['pumpkin', 250], ['carrot', 50], ['cream', 30], ['onion', 30]]);
+
+d('leek_soup', 'Zupa porowa', { en: 'leek and potato soup', emoji: '🍲', slot: 'lunch', color: [90, .30, .70], tex: .25 },
+  [['leek', 150], ['potato', 120], ['cream', 30]]);
+
+/* ---------------- warzywa i wege ---------------- */
+
+d('roasted_vegetables', 'Pieczone warzywa', { en: 'roasted mixed vegetables', emoji: '🥦', slot: 'dinner', color: [25, .45, .60], tex: .55, tags: ['wege'] },
+  [['cauliflower', 150], ['eggplant', 100], ['pepper_red', 80], ['zucchini', 100], ['olive_oil', 15]]);
+
+d('brussels_sprouts_almonds', 'Brukselka z migdałami', { en: 'brussels sprouts with almonds', emoji: '🥬', slot: 'dinner', color: [100, .50, .40], tex: .6 },
+  [['brussels_sprouts', 200], ['butter', 10], ['almonds', 15]]);
+
+d('eggplant_dip', 'Pasta z bakłażana', { en: 'roasted eggplant dip', emoji: '🍆', slot: 'snack', color: [270, .40, .35], tex: .3, tags: ['wege'] },
+  [['eggplant', 200], ['olive_oil', 15], ['garlic', 6]]);
 
 /* ---------------- sałatki i lekkie ---------------- */
 
@@ -160,6 +192,15 @@ d('caprese', 'Caprese', { en: 'caprese salad with mozzarella', emoji: '🍅', sl
 d('hummus_veg', 'Hummus z warzywami', { en: 'hummus with vegetable sticks', emoji: '🥕', slot: 'snack', color: [42, .45, .78], tex: .5, tags: ['wege'] },
   [['hummus', 80], ['carrot', 80], ['pepper_red', 60], ['bread_wholegrain', 40]]);
 
+d('arugula_salad', 'Sałatka z rukolą i mozzarellą', { en: 'arugula tomato mozzarella salad', emoji: '🥗', slot: 'dinner', color: [95, .45, .55], tex: .5 },
+  [['arugula', 60], ['tomato', 100], ['mozzarella', 80], ['walnuts', 15], ['olive_oil', 10]]);
+
+d('celery_apple_walnut_salad', 'Sałatka selerowa z jabłkiem', { en: 'celery apple walnut salad', emoji: '🥗', slot: 'snack', color: [70, .35, .75], tex: .45 },
+  [['celery_stalk', 100], ['apple', 100], ['walnuts', 20], ['yogurt', 60]]);
+
+d('pomegranate_spinach_salad', 'Sałatka ze szpinakiem i granatem', { en: 'spinach pomegranate salad', emoji: '🥗', slot: 'dinner', color: [340, .45, .40], tex: .5 },
+  [['spinach', 60], ['pomegranate', 80], ['mozzarella', 60], ['walnuts', 15], ['olive_oil', 10]]);
+
 /* ---------------- przekąski ---------------- */
 
 d('nuts_mix', 'Mieszanka orzechów', { en: 'mixed nuts', emoji: '🌰', slot: 'snack', color: [32, .45, .60], tex: .8 },
@@ -173,6 +214,15 @@ d('fruit_bowl', 'Miska owoców', { en: 'bowl of mixed fruit', emoji: '🍓', slo
 
 d('post_workout_snack', 'Przekąska potreningowa', { en: 'post workout snack with banana and shake', emoji: '💪', slot: 'snack', color: [45, .45, .85], tex: .4, tags: ['potreningowe'] },
   [['whey', 30], ['banana', 120], ['dates', 30]]);
+
+d('tropical_fruit_bowl', 'Miska tropikalnych owoców', { en: 'tropical fruit bowl', emoji: '🍍', slot: 'snack', color: [45, .60, .85], tex: .35 },
+  [['pineapple', 120], ['mango', 100], ['kiwi', 90], ['coconut', 20]]);
+
+d('stone_fruit_salad', 'Sałatka z owoców pestkowych', { en: 'stone fruit salad', emoji: '🍑', slot: 'snack', color: [15, .55, .70], tex: .3 },
+  [['plum', 100], ['peach', 120], ['cherries', 100]]);
+
+d('mango_coconut_rice', 'Ryż z mango i kokosem', { en: 'sweet rice with mango and coconut', emoji: '🥭', slot: 'snack', color: [42, .65, .85], tex: .4 },
+  [['rice_white', 180], ['mango', 120], ['coconut', 25], ['honey', 10]]);
 
 export default DISHES;
 export const DISH_INDEX = new Map(DISHES.map((x) => [x.id, x]));

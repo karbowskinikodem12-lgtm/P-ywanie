@@ -225,3 +225,5 @@ FoodData Central, tabele IŻŻ dla produktów lokalnych). To dobre dane do
 wyłapywania trendów i braków, a nie wynik badania laboratoryjnego konkretnej
 porcji. Aplikacja mówi o tym wprost w miejscach, gdzie pokazuje mikroskładniki.
 
+
+

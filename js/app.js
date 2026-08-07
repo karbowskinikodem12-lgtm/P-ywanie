@@ -4,6 +4,7 @@
 
 import {
   $, $$, dayKey, fmtDate, fmtDayLabel, isToday, haptic, debounce, esc,
+  paintRange, paintRanges,
 } from './core/utils.js';
 import * as store from './core/store.js';
 import * as db from './core/db.js';
@@ -100,6 +101,7 @@ function paint({ keepScroll = false, focus = null } = {}) {
 
   view.afterRender?.(ctx);
   hydrateThumbs(host);
+  paintRanges(host);
 }
 
 function paintHeader() {
@@ -267,16 +269,25 @@ async function registerSW() {
   try {
     const reg = await navigator.serviceWorker.register('sw.js', { scope: './' });
 
+    const offerUpdate = (sw) => {
+      if (!sw) return;
+      toast('Dostępna nowa wersja', {
+        duration: 8000,
+        actionLabel: 'Odśwież',
+        onAction: () => { sw.postMessage({ type: 'SKIP_WAITING' }); },
+      });
+    };
+
+    // A worker that finished installing during an earlier visit is already
+    // parked in `waiting`, and `updatefound` will never fire for it again.
+    // Without this the user could sit on the old version indefinitely, never
+    // being offered the update that is sitting right there.
+    if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
+
     reg.addEventListener('updatefound', () => {
       const sw = reg.installing;
       sw?.addEventListener('statechange', () => {
-        if (sw.state === 'installed' && navigator.serviceWorker.controller) {
-          toast('Dostępna nowa wersja', {
-            duration: 8000,
-            actionLabel: 'Odśwież',
-            onAction: () => { sw.postMessage({ type: 'SKIP_WAITING' }); },
-          });
-        }
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(sw);
       });
     });
 
@@ -334,6 +345,10 @@ async function boot() {
 
   document.addEventListener('click', onClick);
   document.addEventListener('change', onSettingChange);
+  // Sliders paint their travelled portion from --pct; follow the drag.
+  document.addEventListener('input', (e) => {
+    if (e.target?.type === 'range') paintRange(e.target);
+  });
   $('#tabbar').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-tab]');
     if (btn) go(btn.dataset.tab);

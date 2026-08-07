@@ -56,7 +56,15 @@
 .btn-danger { background: none; color: var(--red); font-weight: 500; }
 .btn-danger-solid { background: var(--red); color: #fff; }
 .btn-sm { padding: 10px 14px; font-size: 15px; min-height: 44px; border-radius: 13px; width: auto; }
-.btn-block + .btn-block { margin-top: 8px; }
+/* Gap for a stacked button. This used to be `.btn-block + .btn-block`, which
+   made the spacing depend on the *previous* button carrying a class that says
+   nothing about spacing — and every stack in Settings opened with a plain
+   `.btn`, so the rule never matched and the pairs sat flush against each
+   other. Only the button being pushed down needs to ask for the gap. */
+.btn + .btn-block { margin-top: 10px; }
+/* An irreversible action gets clear water above it, so it is never the thing
+   a thumb lands on by half an inch. */
+.btn-block.btn-danger-solid, .btn.btn-danger + .btn-block { margin-top: 18px; }
 
 .icon-btn {
   width: 44px; height: 44px; flex: none;
@@ -242,7 +250,11 @@
 .field + .field::before {
   content: ""; position: absolute; top: 0; left: 16px; right: 0; height: .5px; background: var(--sep);
 }
-.field label { font-size: 16px; font-weight: 500; flex: 1; }
+/* `:not(.switch)` matters: a switch is itself a <label>, so the bare
+   `.field label` this used to be caught it too — and at (0,1,1) it outranked
+   `.switch`'s own (0,1,0) `flex: none`, stretching every toggle in Settings
+   from 51px to whatever width was going spare. */
+.field label:not(.switch) { font-size: 16px; font-weight: 500; flex: 1; }
 .field .hint { display: block; font-size: 12.5px; color: var(--sub); font-weight: 400; margin-top: 1px; }
 .field input, .field select, .field textarea {
   border: 0; background: none; color: var(--sub);
@@ -266,36 +278,99 @@
 .input-box textarea { resize: none; min-height: 72px; line-height: 1.45; }
 .input-label { font-size: 12.5px; font-weight: 600; color: var(--sub); margin: 0 4px 6px; }
 
-/* iOS-style switch */
+/* ---------- iOS-style switch ----------
+   Same materials as the range slider: a sunken groove for the track and a
+   knob carrying the chrome's bevel, so the two controls read as one family. */
 .switch { position: relative; width: 51px; height: 31px; flex: none; }
 .switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; }
 .switch i {
-  position: absolute; inset: 0; border-radius: 99px; background: var(--track-strong);
-  transition: background var(--dur) var(--ease); pointer-events: none;
+  position: absolute; inset: 0; border-radius: 99px;
+  background: var(--track-strong);
+  box-shadow: inset 0 1px 2px rgba(16, 42, 66, .22);
+  transition: background var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+  pointer-events: none;
 }
 .switch i::after {
   content: ""; position: absolute; top: 2px; left: 2px; width: 27px; height: 27px;
-  border-radius: 50%; background: #fff; box-shadow: 0 3px 8px rgba(0, 0, 0, .18);
-  transition: transform var(--dur) var(--ease);
+  border-radius: 50%;
+  background: linear-gradient(180deg, #FFF, #EEF2F7);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .95),
+    0 0 0 .5px rgba(16, 42, 66, .14),
+    0 3px 8px -1px rgba(16, 42, 66, .34);
+  /* A spring on the knob is what makes a toggle feel switched rather than
+     faded from one state to the other. */
+  transition: transform var(--dur) var(--spring);
 }
-.switch input:checked + i { background: var(--green); }
+.switch input:checked + i {
+  background: linear-gradient(180deg, #3ED767, var(--green));
+  box-shadow: inset 0 1px 2px rgba(0, 0, 0, .16);
+}
 .switch input:checked + i::after { transform: translateX(20px); }
 .switch input:focus-visible + i { outline: 2px solid var(--blue); outline-offset: 3px; }
 
-/* range slider */
+/* ---------- range slider ----------
+   A bare grey line tells you nothing about where the value sits in its span.
+   The track is a sunken groove whose travelled part is filled with the accent
+   gradient, so the position reads at a glance instead of having to be measured
+   against the thumb. WebKit cannot style the travelled part, so the fill is a
+   background layer sized by `--pct`, which `paintRanges()` keeps in step with
+   the value. Firefox has ::-moz-range-progress and needs no such help. */
 input[type=range] {
-  width: 100%; margin: 12px 0 0; -webkit-appearance: none; appearance: none; background: transparent;
+  --pct: 0%;
+  width: 100%;
+  margin: 14px 0 2px;
+  -webkit-appearance: none; appearance: none;
+  background: transparent;
+  /* Comfortably past the 44pt minimum for the drag target while the visible
+     groove stays slim. */
+  height: 34px;
 }
-input[type=range]::-webkit-slider-runnable-track { height: 5px; border-radius: 99px; background: var(--track-strong); }
+input[type=range]::-webkit-slider-runnable-track {
+  height: 8px;
+  border-radius: 99px;
+  background:
+    linear-gradient(90deg, var(--mint), var(--blue)) 0 / var(--pct) 100% no-repeat,
+    var(--track-strong);
+  box-shadow: inset 0 1px 2px rgba(16, 42, 66, .18);
+}
 input[type=range]::-webkit-slider-thumb {
-  -webkit-appearance: none; width: 28px; height: 28px; border-radius: 50%;
-  background: #fff; margin-top: -11.5px;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, .22), 0 0 0 .5px rgba(0, 0, 0, .06);
+  -webkit-appearance: none;
+  width: 26px; height: 26px; border-radius: 50%;
+  margin-top: -9px;                       /* centres a 26px thumb on an 8px track */
+  background: linear-gradient(180deg, #FFF, #EEF2F7);
+  box-shadow:
+    inset 0 1px 1px rgba(255, 255, 255, .95),
+    0 0 0 .5px rgba(16, 42, 66, .16),
+    0 4px 10px -2px rgba(16, 42, 66, .32);
+  transition: transform var(--dur-fast) var(--ease);
 }
-input[type=range]::-moz-range-track { height: 5px; border-radius: 99px; background: var(--track-strong); }
+input[type=range]:active::-webkit-slider-thumb { transform: scale(1.14); }
+
+input[type=range]::-moz-range-track {
+  height: 8px; border-radius: 99px; background: var(--track-strong);
+  box-shadow: inset 0 1px 2px rgba(16, 42, 66, .18);
+}
+input[type=range]::-moz-range-progress {
+  height: 8px; border-radius: 99px;
+  background: linear-gradient(90deg, var(--mint), var(--blue));
+}
 input[type=range]::-moz-range-thumb {
-  width: 26px; height: 26px; border: 0; border-radius: 50%; background: #fff;
-  box-shadow: 0 3px 8px rgba(0, 0, 0, .22);
+  width: 26px; height: 26px; border: 0; border-radius: 50%;
+  background: linear-gradient(180deg, #FFF, #EEF2F7);
+  box-shadow: 0 0 0 .5px rgba(16, 42, 66, .16), 0 4px 10px -2px rgba(16, 42, 66, .32);
+  transition: transform var(--dur-fast) var(--ease);
+}
+input[type=range]:active::-moz-range-thumb { transform: scale(1.14); }
+:root[data-theme="dark"] input[type=range]::-webkit-slider-thumb,
+:root[data-theme="dark"] input[type=range]::-moz-range-thumb {
+  background: linear-gradient(180deg, #F4F7FA, #C9D2DC);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) input[type=range]::-webkit-slider-thumb,
+  :root:not([data-theme="light"]) input[type=range]::-moz-range-thumb {
+    background: linear-gradient(180deg, #F4F7FA, #C9D2DC);
+  }
 }
 
 /* stepper */

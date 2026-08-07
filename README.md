@@ -192,6 +192,37 @@ Widoki to czyste funkcje zwracające HTML, więc przerysowanie ekranu jest jedn�
 podmianą `innerHTML`; nie ma drzewa komponentów do uzgadniania. Analiza zdjęcia
 liczy cechy na obrazie 192 px, nie na oryginale z aparatu.
 
+### Płynność przewijania
+
+Szybki render to nie to samo co płynne przewijanie — to drugie zależy od tego,
+ile pracy kompozytor ma do wykonania w każdej klatce. Mierzone przy czterokrotnym
+spowolnieniu procesora, żeby przybliżyć telefon:
+
+| ekran | przed | po |
+|---|---|---|
+| Dzisiaj | 39 fps | 60 fps |
+| Trening | 36 fps | 60 fps |
+| Mikro | 41 fps | 60 fps |
+| Historia | 37 fps | 60 fps |
+| klatki powyżej 20 ms | 95–97 % | 0–0,7 % |
+
+Złożyły się na to dwie przyczyny, obie niewidoczne w czasach renderowania:
+
+**Rozmycie tła tam, gdzie nic się za nim nie rusza.** `backdrop-filter` czyta
+jak szkło tylko wtedy, gdy coś pod nim przepływa. Karty z treścią przewijają
+się razem ze swoim tłem, więc rozmycie kosztowało próbkowanie całej karty w
+każdej klatce, a zwracało obraz nie do odróżnienia od zwykłego półprzezroczystego
+wypełnienia. Pulpit rozmywał 2,74 ekranu na klatkę w czternastu warstwach. Zostały
+trzy — pasek zakładek i dwa okrągłe przyciski, czyli jedyne powierzchnie, pod
+którymi strona faktycznie przesuwa się w bok — łącznie 0,09 ekranu.
+
+**Animacja, która przemalowywała największą kartę bez końca.** Fala na karcie
+energii przesuwała `background-position-x`. Tej właściwości kompozytor nie
+potrafi animować sam, więc karta była przemalowywana w każdej klatce, także gdy
+aplikacja stała bezczynnie. Pasek fali jest teraz o jeden kafel szerszy niż karta
+i przesuwa się przez `transform`, co dzieje się poza wątkiem głównym i nie
+przemalowuje niczego.
+
 ---
 
 ## Dostępność

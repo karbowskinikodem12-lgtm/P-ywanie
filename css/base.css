@@ -14,6 +14,9 @@
   --card: rgba(255, 255, 255, .66);
   --card-solid: rgba(255, 255, 255, .88);
   --card-flat: #FFFFFF;
+  /* Floating chrome (tab bar, action bar) sits over arbitrary content, so it
+     needs more body than a content card or headlines read straight through it. */
+  --chrome: rgba(255, 255, 255, .82);
   --edge: rgba(255, 255, 255, .9);
   --shadow-sm: 0 4px 14px -8px rgba(16, 42, 66, .30);
   --shadow: 0 10px 30px -12px rgba(16, 42, 66, .28);
@@ -89,6 +92,7 @@
     --card: rgba(28, 32, 38, .62);
     --card-solid: rgba(32, 36, 42, .90);
     --card-flat: #171C23;
+    --chrome: rgba(26, 30, 36, .84);
     --edge: rgba(255, 255, 255, .12);
     --shadow-sm: 0 4px 16px -10px rgba(0, 0, 0, .8);
     --shadow: 0 12px 34px -14px rgba(0, 0, 0, .8);
@@ -123,6 +127,7 @@
   --card: rgba(28, 32, 38, .62);
   --card-solid: rgba(32, 36, 42, .90);
   --card-flat: #171C23;
+  --chrome: rgba(26, 30, 36, .84);
   --edge: rgba(255, 255, 255, .12);
   --shadow-sm: 0 4px 16px -10px rgba(0, 0, 0, .8);
   --shadow: 0 12px 34px -14px rgba(0, 0, 0, .8);
@@ -165,7 +170,11 @@ body {
   touch-action: manipulation;
 }
 
-/* Ambient background wash. Fixed + blurred so scrolling never repaints it. */
+/* Ambient background wash.
+   Radial gradients are already soft-edged, so the `filter: blur(30px)` this
+   used to carry bought nothing visible while forcing a full-viewport filter
+   layer the compositor had to keep alive behind every other surface. The
+   gradients now fade out on their own. */
 body::before {
   content: "";
   position: fixed;
@@ -173,11 +182,9 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(38% 30% at 22% 12%, var(--blob-1), transparent 70%),
-    radial-gradient(42% 32% at 84% 26%, var(--blob-2), transparent 70%),
-    radial-gradient(46% 34% at 50% 88%, var(--blob-3), transparent 72%);
-  filter: blur(30px);
-  transform: translateZ(0);
+    radial-gradient(38% 30% at 22% 12%, var(--blob-1), transparent 72%),
+    radial-gradient(42% 32% at 84% 26%, var(--blob-2), transparent 72%),
+    radial-gradient(46% 34% at 50% 88%, var(--blob-3), transparent 74%);
 }
 
 button, input, select, textarea {
@@ -214,9 +221,11 @@ p { margin: 0; }
   z-index: 1;
   max-width: var(--shell);
   margin: 0 auto;
-  padding: 0 var(--pad) calc(150px + var(--safe-b));
+  /* Clears the tab bar (12+65) and the action bar stacked above it (93+52). */
+  padding: 0 var(--pad) calc(162px + var(--safe-b));
   min-height: 100dvh;
 }
+#app.no-fab { padding-bottom: calc(96px + var(--safe-b)); }
 
 .stack { display: grid; gap: 12px; }
 .stack-sm { display: grid; gap: 8px; }

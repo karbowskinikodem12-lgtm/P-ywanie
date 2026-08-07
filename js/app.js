@@ -122,6 +122,9 @@ function paintFab() {
   const bar = $('#fabBar');
   const show = activeView === 'day' || activeView === 'micro';
   bar.classList.toggle('away', !show);
+  // Views without the action bar only have to clear the tab bar, so they get
+  // their trailing space back instead of ending on a stretch of blank page.
+  $('#app').classList.toggle('no-fab', !show);
 }
 
 /* ==========================================================================

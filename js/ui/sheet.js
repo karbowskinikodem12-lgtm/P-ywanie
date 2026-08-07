@@ -3,7 +3,7 @@
    focus trapping, Escape/back-button handling.
    ========================================================================== */
 
-import { $, haptic, prefersReducedMotion } from '../core/utils.js';
+import { $, haptic, prefersReducedMotion, paintRanges } from '../core/utils.js';
 
 let scrim, sheet, body;
 let current = null;
@@ -52,7 +52,7 @@ export function open(html, { label = 'Panel', onClose = null, dismissible = true
 
   current = { onClose, dismissible };
   sheet.setAttribute('aria-label', label);
-  body.innerHTML = html;
+  setBody(html);
   sheet.scrollTop = 0;
   sheet.classList.add('on');
   scrim.classList.add('on');
@@ -65,14 +65,23 @@ export function open(html, { label = 'Panel', onClose = null, dismissible = true
   });
 
   return {
-    update(nextHtml) { if (current) body.innerHTML = nextHtml; },
+    update(nextHtml) { if (current) setBody(nextHtml); },
     close: () => close(),
     el: body,
   };
 }
 
 export function update(html) {
-  if (current && body) body.innerHTML = html;
+  if (current && body) setBody(html);
+}
+
+/**
+ * The single way sheet content is written. Anything that has to run against
+ * freshly injected markup belongs here, so no call site can forget it.
+ */
+function setBody(html) {
+  body.innerHTML = html;
+  paintRanges(body);
 }
 
 export function close({ fromHistory = false } = {}) {

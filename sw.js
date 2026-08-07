@@ -2,16 +2,28 @@
    Service worker.
 
    Strategy per request type:
-     • app shell (html/css/js)  — stale-while-revalidate, so launches are
-       instant and updates land on the next visit
+     • the document and the code it references (css/js) — network-first with a
+       cache fallback, because these three MUST come from the same deploy
      • model weights (Hugging Face / CDN) — cache-first with a long life;
        these files are content-addressed and never change in place
-     • everything else — network with a cache fallback
+     • everything else — stale-while-revalidate
+
+   Why the shell is not stale-while-revalidate:
+
+   There is no build step here, so filenames carry no content hash and the
+   document references `css/components.css` at a fixed path. Navigations were
+   already network-first while css/js were served from cache, which meant that
+   after every deploy the first launch paired a *fresh* index.html with the
+   *previous* release's stylesheet and modules. That is not a cosmetic risk:
+   a class the new markup relies on simply does not exist in the old sheet, so
+   the app renders half-dressed — and old modules against new markup can break
+   behaviour outright. Serving all three from the network, with the cache as
+   the offline fallback, makes the shell atomic.
 
    Bump CACHE_VERSION on every release.
    ========================================================================== */
 
-const CACHE_VERSION = 'tor-v3';
+const CACHE_VERSION = 'tor-v4';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const MODEL_CACHE = 'tor-models-v1';
@@ -70,7 +82,9 @@ self.addEventListener('install', (event) => {
     const cache = await caches.open(SHELL_CACHE);
     // addAll fails the whole install if a single file 404s — add individually
     // so one missing asset can never brick the offline experience.
-    await Promise.all(SHELL.map((url) => cache.add(url).catch((e) => {
+    // `cache: 'reload'` bypasses the HTTP cache: a new shell cache that was
+    // filled from stale browser-cached copies would defeat the whole point.
+    await Promise.all(SHELL.map((url) => cache.add(new Request(url, { cache: 'reload' })).catch((e) => {
       console.warn('[sw] skipped', url, e.message);
     })));
     // No skipWaiting here on purpose: a new version must not swap itself in
@@ -124,8 +138,20 @@ self.addEventListener('fetch', (event) => {
     return;
   }
 
+  // The code the document references travels with it — see the note up top.
+  if (isShellCode(url)) {
+    event.respondWith(networkFirst(request));
+    return;
+  }
+
   event.respondWith(staleWhileRevalidate(request));
 });
+
+/** Stylesheets and modules: the part of the shell that must match the HTML. */
+function isShellCode(url) {
+  const p = url.pathname;
+  return (p.endsWith('.css') || p.endsWith('.js')) && !p.endsWith('/sw.js');
+}
 
 async function cacheFirst(request, cacheName) {
   const cache = await caches.open(cacheName);
@@ -137,6 +163,21 @@ async function cacheFirst(request, cacheName) {
     return res;
   } catch {
     return hit || Response.error();
+  }
+}
+
+/**
+ * Network wins when it answers; the cache only stands in when it does not.
+ * Keeps the served shell internally consistent while still opening offline.
+ */
+async function networkFirst(request) {
+  const cache = await caches.open(SHELL_CACHE);
+  try {
+    const fresh = await fetch(request);
+    if (fresh.ok) cache.put(request, fresh.clone());
+    return fresh;
+  } catch {
+    return (await cache.match(request)) || Response.error();
   }
 }
 

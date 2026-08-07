@@ -2,11 +2,21 @@
    Tor — reusable components. Nothing here knows about a specific screen.
    ========================================================================== */
 
-/* ---------- glass surface ---------- */
+/* ---------- glass surface ----------
+
+   A backdrop blur only *reads* as glass when something moves underneath it.
+   Content cards scroll together with the page, so the wash behind them is
+   effectively pinned to the card: the blur cost the GPU a re-sample of the
+   whole card every frame and gave back an image nobody could tell apart from
+   a plain translucent fill. Measured on a throttled phone profile, the
+   dashboard alone was blurring 2.7 viewports per frame and holding ~40 fps.
+
+   So the blur now lives only on the surfaces the page genuinely slides beneath
+   — the floating chrome, which opts in via `.glassy` below. Everything else
+   gets `--card-solid`, the same surface the no-backdrop-filter fallback has
+   always shipped, so devices lacking the property see no change at all. */
 .glass {
-  background: var(--card);
-  -webkit-backdrop-filter: blur(28px) saturate(180%);
-  backdrop-filter: blur(28px) saturate(180%);
+  background: var(--card-solid);
   border: .5px solid var(--edge);
   border-radius: var(--radius-lg);
   box-shadow: var(--shadow);
@@ -19,11 +29,6 @@
 }
 .pad { padding: 16px 18px; }
 .pad-lg { padding: 20px 20px 22px; }
-
-/* Devices without backdrop-filter get a solid surface instead of a grey haze. */
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .glass { background: var(--card-solid); }
-}
 
 /* ---------- buttons ---------- */
 .btn {
@@ -303,6 +308,58 @@ input[type=range]::-moz-range-thumb {
 .stepper button:active { transform: scale(.88); }
 .stepper .sv { min-width: 62px; text-align: center; font-size: 17px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
+/* ---------- moulded glass ----------
+   The shared recipe for a piece of cut glass, used by the floating chrome.
+   Four things stack to make the illusion, and only the first has any
+   per-frame cost:
+
+     1. the frosted backdrop blur
+     2. a bright rim around the whole edge, catching light
+     3. an inner bevel: a hot line just inside the top edge and a softer one
+       inside the bottom, which is what gives the pane thickness
+     4. a specular gleam sliding off the upper-left shoulder (`::before`)
+       and a faint counter-gleam on the lower-right (`::after`)
+
+   Steps 2-4 are painted once into the element's layer and are free while
+   scrolling, which is why the chrome can look this heavy at a locked 60 fps. */
+.glassy {
+  position: relative;
+  background-image: var(--glass-sheen);
+  background-color: var(--chrome);
+  border: 1px solid var(--rim);
+  -webkit-backdrop-filter: blur(22px) saturate(185%);
+  backdrop-filter: blur(22px) saturate(185%);
+  box-shadow:
+    inset 0 1px 1px -.5px var(--gleam),        /* hot bevel under the top edge */
+    inset 0 -1px 1px -.5px var(--gleam-soft),  /* softer bevel above the bottom */
+    inset 0 0 0 .5px var(--rim-soft),          /* keeps the rim from thinning */
+    0 0 0 .5px var(--outline),                 /* defines the cut on a pale page */
+    var(--shadow);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .glassy { background-color: var(--card-solid); }
+}
+/* Specular streaks: light running *along* the bevel, not pooling inside it.
+   Pure paint, never hit-testable, and under the content so labels stay legible. */
+.glassy::before,
+.glassy::after {
+  content: "";
+  position: absolute;
+  pointer-events: none;
+  height: 1.5px;
+  border-radius: 99px;
+  z-index: 0;
+}
+.glassy::before {
+  left: 9%; right: 46%; top: 1px;
+  background: linear-gradient(90deg, transparent, var(--gleam) 42%, transparent);
+}
+.glassy::after {
+  left: 54%; right: 10%; bottom: 1px;
+  background: linear-gradient(90deg, transparent, var(--gleam-soft) 58%, transparent);
+}
+.glassy > * { position: relative; z-index: 1; }
+
 /* ---------- tab bar ---------- */
 .tabbar {
   position: fixed; left: 0; right: 0;
@@ -314,20 +371,30 @@ input[type=range]::-moz-range-thumb {
 }
 .tabbar button {
   flex: 1; padding: 7px 2px; border-radius: 99px;
-  color: var(--sub); font-size: 10.5px; font-weight: 600;
+  /* --text-2 rather than --sub: the bar is translucent glass, so the surface
+     under a 10.5px label varies with whatever scrolled beneath it, and --sub
+     measured 3.9:1 against the silver — short of the 4.5:1 AA needs. */
+  color: var(--text-2); font-size: 10.5px; font-weight: 600;
   display: flex; flex-direction: column; align-items: center; gap: 3px;
-  transition: color var(--dur), background var(--dur);
+  transition: color var(--dur), background var(--dur), box-shadow var(--dur);
 }
 .tabbar button svg {
   width: 22px; height: 22px; stroke: currentColor; fill: none;
   stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
 }
-.tabbar button[aria-selected="true"] { color: var(--blue); background: var(--card-solid); }
+/* The selected tab is its own smaller pane of glass sitting on the bar. */
+.tabbar button[aria-selected="true"] {
+  color: var(--tab-on);
+  background: linear-gradient(180deg, var(--gleam-soft), transparent 62%), var(--chrome-on);
+  box-shadow: inset 0 .5px 0 var(--gleam), 0 2px 8px -4px rgba(16, 42, 66, .4);
+}
 
-/* ---------- floating action bar ---------- */
+/* ---------- floating action bar ----------
+   Sits one clear gap above the tab bar. The old 84px offset left only 7px of
+   air below the buttons, so the two bars read as one crowded slab. */
 .fab-bar {
   position: fixed; left: 0; right: 0;
-  bottom: calc(84px + var(--safe-b));
+  bottom: calc(93px + var(--safe-b));
   z-index: 40;
   max-width: var(--shell); margin: 0 auto;
   padding: 0 var(--pad);
@@ -336,32 +403,54 @@ input[type=range]::-moz-range-thumb {
   transition: transform var(--dur-slow) var(--ease), opacity var(--dur);
 }
 .fab-bar > * { pointer-events: auto; }
-.fab-bar.away { transform: translateY(130%); opacity: 0; pointer-events: none; }
-.fab-bar .btn { flex: 1; }
+.fab-bar.away { transform: translateY(150%); opacity: 0; pointer-events: none; }
+/* Primary and round buttons share one height and one radius, so the row reads
+   as three pieces cut from the same sheet rather than a slab beside two dots. */
+.fab-bar .btn { flex: 1; min-height: 52px; border-radius: 99px; }
+/* The primary stays solid blue for hierarchy, but takes the same bevel and
+   top gleam so it belongs to the glass family. */
+.fab-bar .btn-primary {
+  background-image: linear-gradient(180deg, rgba(255, 255, 255, .28), rgba(255, 255, 255, 0) 52%);
+  box-shadow:
+    inset 0 1px 1px -.5px rgba(255, 255, 255, .75),
+    inset 0 0 0 .5px rgba(255, 255, 255, .35),
+    0 10px 26px -10px rgba(0, 122, 255, .95);
+}
 .fab-round {
   width: 52px; height: 52px; flex: none; border-radius: 50%;
   display: grid; place-items: center; color: var(--text);
   transition: transform var(--dur-fast) var(--ease);
 }
+/* A disc has almost no width at its very top, so the shared streaks would
+   hang out past the circle. They are pulled inward and down to where it is
+   still wide, which also stops the shape needing an `overflow` clip — and
+   that clip would have taken the keyboard focus ring with it in Safari. */
+.fab-round::before { left: 24%; right: 33%; top: 6px; }
+.fab-round::after { left: 35%; right: 24%; bottom: 6px; }
 .fab-round:active { transform: scale(.92); }
 .fab-round svg { width: 22px; height: 22px; stroke: currentColor; fill: none; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
 
 /* ---------- sheet ---------- */
+/* The scrim covers the whole viewport, so its blur is gated on `.on`: an
+   idle app must not keep a full-screen filter layer alive for a sheet that
+   is not open. */
 .scrim {
   position: fixed; inset: 0; z-index: 60;
   background: rgba(8, 18, 28, .42);
-  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
   opacity: 0; pointer-events: none;
   transition: opacity var(--dur-slow);
 }
-.scrim.on { opacity: 1; pointer-events: auto; }
+.scrim.on {
+  opacity: 1; pointer-events: auto;
+  -webkit-backdrop-filter: blur(3px); backdrop-filter: blur(3px);
+}
 
 .sheet {
   position: fixed; left: 0; right: 0; bottom: 0; z-index: 61;
   max-width: var(--shell); margin: 0 auto;
-  background: var(--card-solid);
-  -webkit-backdrop-filter: blur(34px) saturate(180%);
-  backdrop-filter: blur(34px) saturate(180%);
+  /* Opaque: the scrim behind already blurs the page, so translucency here
+     bought nothing but meal rows ghosting through the form fields. */
+  background: var(--bg-elevated);
   border-top: .5px solid var(--edge);
   border-radius: 30px 30px 0 0;
   padding: 8px var(--pad) calc(22px + var(--safe-b));
@@ -385,15 +474,15 @@ input[type=range]::-moz-range-thumb {
 /* ---------- toast ---------- */
 .toast-host {
   position: fixed; left: 0; right: 0; z-index: 90;
-  bottom: calc(150px + var(--safe-b));
+  /* Just above the action bar, so a toast never lands on top of it. */
+  bottom: calc(157px + var(--safe-b));
   display: flex; flex-direction: column; align-items: center; gap: 8px;
   pointer-events: none; padding: 0 var(--pad);
 }
 .toast {
   display: flex; align-items: center; gap: 10px;
+  /* --card-solid is ~90% opaque; a backdrop blur behind it was invisible. */
   background: var(--card-solid);
-  -webkit-backdrop-filter: blur(24px) saturate(180%);
-  backdrop-filter: blur(24px) saturate(180%);
   border: .5px solid var(--edge);
   border-radius: 99px;
   padding: 11px 18px;

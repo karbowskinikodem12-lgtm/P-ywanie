@@ -155,6 +155,24 @@ export function throttle(fn, ms = 100) {
   };
 }
 
+/**
+ * Range inputs draw their travelled portion from a `--pct` custom property,
+ * because WebKit offers no pseudo-element for it. Call after injecting markup
+ * that contains sliders; while one is being dragged, app.js keeps it current.
+ */
+export function paintRange(input) {
+  if (!input) return;
+  const min = +input.min || 0;
+  const max = input.max === '' ? 100 : +input.max;
+  const span = max - min;
+  const pct = span > 0 ? ((+input.value - min) / span) * 100 : 0;
+  input.style.setProperty('--pct', `${clamp(pct, 0, 100)}%`);
+}
+
+export function paintRanges(root = document) {
+  root?.querySelectorAll?.('input[type=range]').forEach(paintRange);
+}
+
 export const raf = () => new Promise((r) => requestAnimationFrame(() => r()));
 export const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 

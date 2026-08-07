@@ -4,6 +4,7 @@
 
 import {
   $, $$, dayKey, fmtDate, fmtDayLabel, isToday, haptic, debounce, esc,
+  paintRange, paintRanges,
 } from './core/utils.js';
 import * as store from './core/store.js';
 import * as db from './core/db.js';
@@ -100,6 +101,7 @@ function paint({ keepScroll = false, focus = null } = {}) {
 
   view.afterRender?.(ctx);
   hydrateThumbs(host);
+  paintRanges(host);
 }
 
 function paintHeader() {
@@ -343,6 +345,10 @@ async function boot() {
 
   document.addEventListener('click', onClick);
   document.addEventListener('change', onSettingChange);
+  // Sliders paint their travelled portion from --pct; follow the drag.
+  document.addEventListener('input', (e) => {
+    if (e.target?.type === 'range') paintRange(e.target);
+  });
   $('#tabbar').addEventListener('click', (e) => {
     const btn = e.target.closest('button[data-tab]');
     if (btn) go(btn.dataset.tab);

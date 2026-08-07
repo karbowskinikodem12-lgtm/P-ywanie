@@ -33,7 +33,7 @@ Brak kroku budowania, brak zależności, brak `node_modules`.
 
 ```
 index.html            powłoka aplikacji (statyczna, ~6 kB)
-sw.js                 service worker: shell + wagi modelu w cache
+sw.js                 service worker: powłoka z sieci, wagi modelu z cache
 manifest.webmanifest  instalacja, skróty (zdjęcie / trening / woda)
 
 css/
@@ -228,6 +228,27 @@ efektu szkła tylko rozmycie tła kosztuje cokolwiek przy przewijaniu; rant,
 faza i refleksy są malowane raz do warstwy elementu. Dlatego pływające menu jest
 dziś wizualnie cięższe niż przed optymalizacją — pełna faza, jasny rant i smugi
 światła wzdłuż krawędzi — mimo że rozmywa trzydzieści razy mniejszą powierzchnię.
+
+---
+
+### Spójność powłoki po wdrożeniu
+
+Nie ma kroku budowania, więc nazwy plików nie niosą skrótu treści — dokument
+zawsze odwołuje się do `css/components.css` pod stałą ścieżką. Gdy nawigacje
+szły z sieci, a arkusze i moduły z cache, pierwsze wejście po każdym wdrożeniu
+łączyło **świeży `index.html` z arkuszem i modułami z poprzedniego wydania**.
+To nie jest ryzyko kosmetyczne: klasa, na której opiera się nowy znacznik, po
+prostu nie istnieje w starym arkuszu, więc aplikacja rysuje się półubrana —
+a stare moduły przy nowym znaczniku potrafią zepsuć samo działanie.
+
+Dokument i kod, do którego się odwołuje, idą więc razem: z sieci, z cache jako
+zapasem na tryb offline. Wagi modelu zostają cache-first, bo są adresowane
+treścią i nigdy nie zmieniają się w miejscu.
+
+Osobno: worker, który skończył instalację podczas wcześniejszej wizyty, czeka
+zaparkowany w `waiting`, a `updatefound` nie odpali się dla niego drugi raz.
+Aplikacja sprawdza więc `waiting` także na starcie, inaczej użytkownik mógłby
+tkwić na starej wersji, mając nową tuż obok.
 
 ---
 

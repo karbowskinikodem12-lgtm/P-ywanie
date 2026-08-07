@@ -57,8 +57,6 @@ export function render(ctx) {
     </section>
 
     <div class="quick">
-      <button data-action="capture:photo">${icon('camera')}<span>Zdjęcie</span></button>
-      <button data-action="meal:search">${icon('search')}<span>Szukaj</span></button>
       <button data-action="water:add">${icon('drop')}<span>+${state.settings.glassSize} ml</span></button>
       <button data-action="workout:add">${icon('swim')}<span>Trening</span></button>
     </div>

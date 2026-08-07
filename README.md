@@ -192,11 +192,54 @@ Widoki to czyste funkcje zwracające HTML, więc przerysowanie ekranu jest jedn�
 podmianą `innerHTML`; nie ma drzewa komponentów do uzgadniania. Analiza zdjęcia
 liczy cechy na obrazie 192 px, nie na oryginale z aparatu.
 
+### Płynność przewijania
+
+Szybki render to nie to samo co płynne przewijanie — to drugie zależy od tego,
+ile pracy kompozytor ma do wykonania w każdej klatce. Mierzone przy czterokrotnym
+spowolnieniu procesora, żeby przybliżyć telefon:
+
+| ekran | przed | po |
+|---|---|---|
+| Dzisiaj | 39 fps | 60 fps |
+| Trening | 36 fps | 60 fps |
+| Mikro | 41 fps | 60 fps |
+| Historia | 37 fps | 60 fps |
+| klatki powyżej 20 ms | 95–97 % | 0–0,7 % |
+
+Złożyły się na to dwie przyczyny, obie niewidoczne w czasach renderowania:
+
+**Rozmycie tła tam, gdzie nic się za nim nie rusza.** `backdrop-filter` czyta
+jak szkło tylko wtedy, gdy coś pod nim przepływa. Karty z treścią przewijają
+się razem ze swoim tłem, więc rozmycie kosztowało próbkowanie całej karty w
+każdej klatce, a zwracało obraz nie do odróżnienia od zwykłego półprzezroczystego
+wypełnienia. Pulpit rozmywał 2,74 ekranu na klatkę w czternastu warstwach. Zostały
+trzy — pasek zakładek i dwa okrągłe przyciski, czyli jedyne powierzchnie, pod
+którymi strona faktycznie przesuwa się w bok — łącznie 0,09 ekranu.
+
+**Animacja, która przemalowywała największą kartę bez końca.** Fala na karcie
+energii przesuwała `background-position-x`. Tej właściwości kompozytor nie
+potrafi animować sam, więc karta była przemalowywana w każdej klatce, także gdy
+aplikacja stała bezczynnie. Pasek fali jest teraz o jeden kafel szerszy niż karta
+i przesuwa się przez `transform`, co dzieje się poza wątkiem głównym i nie
+przemalowuje niczego.
+
+Warto zauważyć, że to **nie** jest kompromis „mniej szkła za płynność". Z całego
+efektu szkła tylko rozmycie tła kosztuje cokolwiek przy przewijaniu; rant,
+faza i refleksy są malowane raz do warstwy elementu. Dlatego pływające menu jest
+dziś wizualnie cięższe niż przed optymalizacją — pełna faza, jasny rant i smugi
+światła wzdłuż krawędzi — mimo że rozmywa trzydzieści razy mniejszą powierzchnię.
+
 ---
 
 ## Dostępność
 
 - Kontrast tekstu pomocniczego 4,5:1 (WCAG AA) w obu motywach.
+- Pasek zakładek jest przezroczystym szkłem, więc powierzchnia pod etykietą
+  zmienia się razem z przewijaną treścią. Etykiety mierzone na tej powierzchni
+  przy ukrytych glifach trzymają 6,1–8,9:1. Aktywna zakładka ma celowo
+  nieprzezroczystą pigułkę — półprzezroczysta pozwalałaby treści pod spodem
+  huśtać kontrastem napisu — i własny odcień błękitu (`--tab-on`), bo systemowy
+  `--blue` na tej pigułce mierzy 3,4:1 i nie przechodzi AA.
 - Wszystkie cele dotknięcia co najmniej 44 pt zgodnie z iOS HIG; wyjątkiem są
   segmentowane przełączniki (36 pt, tyle co systemowe) i słupki wykresu.
 - Każdy element sterujący ma nazwę dla czytnika ekranu, każde pole — etykietę.

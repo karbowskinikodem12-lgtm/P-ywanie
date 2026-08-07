@@ -14,7 +14,34 @@
   --card: rgba(255, 255, 255, .66);
   --card-solid: rgba(255, 255, 255, .88);
   --card-flat: #FFFFFF;
+  /* Floating chrome (tab bar, action bar). Deliberately a cool silver rather
+     than white: the rim and gleam that make it read as glass are white, and a
+     white rim on a white body is invisible. The reference this is modelled on
+     works the same way — grey pane, bright edge. */
+  --chrome: rgba(216, 226, 238, .72);
+  /* Opaque on purpose: the bar behind it is translucent glass, so a see-through
+     selected pill would let scrolling content swing the contrast of its label. */
+  --chrome-on: #FFFFFF;
+  /* The selected tab's label is 10.5px on that pane. System blue measures
+     3.4:1 there and misses AA, so the tab bar uses a shifted blue — darker on
+     the light pane, lighter on the dark one. Everything else keeps --blue. */
+  --tab-on: #0062CC;
   --edge: rgba(255, 255, 255, .9);
+
+  /* --- glass rim & specular highlight ---
+     What makes a surface read as a cut sheet of glass is not the blur, it is
+     the bright rim catching light and the gleam sliding off one corner. Both
+     are painted once into the layer, so unlike a backdrop blur they cost
+     nothing per scrolled frame. */
+  --rim: rgba(255, 255, 255, .85);
+  --rim-soft: rgba(255, 255, 255, .45);
+  --gleam: rgba(255, 255, 255, .95);
+  --gleam-soft: rgba(255, 255, 255, .55);
+  /* On a near-white page a white rim has nothing to contrast against, so the
+     glass also carries a faint dark hairline — the same way a real edge
+     refracts darker than the sheet it is cut from. */
+  --outline: rgba(16, 42, 66, .10);
+  --glass-sheen: linear-gradient(157deg, rgba(255, 255, 255, .45) 0%, rgba(255, 255, 255, .06) 38%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, .22) 100%);
   --shadow-sm: 0 4px 14px -8px rgba(16, 42, 66, .30);
   --shadow: 0 10px 30px -12px rgba(16, 42, 66, .28);
   --shadow-lg: 0 24px 60px -24px rgba(16, 42, 66, .45);
@@ -89,6 +116,15 @@
     --card: rgba(28, 32, 38, .62);
     --card-solid: rgba(32, 36, 42, .90);
     --card-flat: #171C23;
+    --chrome: rgba(40, 46, 55, .74);
+    --chrome-on: #1E232C;
+    --tab-on: #4DA3FF;
+    --rim: rgba(255, 255, 255, .30);
+    --rim-soft: rgba(255, 255, 255, .12);
+    --gleam: rgba(255, 255, 255, .45);
+    --gleam-soft: rgba(255, 255, 255, .18);
+    --outline: rgba(0, 0, 0, .35);
+    --glass-sheen: linear-gradient(157deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .03) 38%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, .08) 100%);
     --edge: rgba(255, 255, 255, .12);
     --shadow-sm: 0 4px 16px -10px rgba(0, 0, 0, .8);
     --shadow: 0 12px 34px -14px rgba(0, 0, 0, .8);
@@ -123,6 +159,15 @@
   --card: rgba(28, 32, 38, .62);
   --card-solid: rgba(32, 36, 42, .90);
   --card-flat: #171C23;
+  --chrome: rgba(40, 46, 55, .74);
+  --chrome-on: #1E232C;
+  --tab-on: #4DA3FF;
+  --rim: rgba(255, 255, 255, .30);
+  --rim-soft: rgba(255, 255, 255, .12);
+  --gleam: rgba(255, 255, 255, .45);
+  --gleam-soft: rgba(255, 255, 255, .18);
+  --outline: rgba(0, 0, 0, .35);
+  --glass-sheen: linear-gradient(157deg, rgba(255, 255, 255, .16) 0%, rgba(255, 255, 255, .03) 38%, rgba(255, 255, 255, 0) 62%, rgba(255, 255, 255, .08) 100%);
   --edge: rgba(255, 255, 255, .12);
   --shadow-sm: 0 4px 16px -10px rgba(0, 0, 0, .8);
   --shadow: 0 12px 34px -14px rgba(0, 0, 0, .8);
@@ -165,7 +210,11 @@ body {
   touch-action: manipulation;
 }
 
-/* Ambient background wash. Fixed + blurred so scrolling never repaints it. */
+/* Ambient background wash.
+   Radial gradients are already soft-edged, so the `filter: blur(30px)` this
+   used to carry bought nothing visible while forcing a full-viewport filter
+   layer the compositor had to keep alive behind every other surface. The
+   gradients now fade out on their own. */
 body::before {
   content: "";
   position: fixed;
@@ -173,11 +222,9 @@ body::before {
   z-index: 0;
   pointer-events: none;
   background:
-    radial-gradient(38% 30% at 22% 12%, var(--blob-1), transparent 70%),
-    radial-gradient(42% 32% at 84% 26%, var(--blob-2), transparent 70%),
-    radial-gradient(46% 34% at 50% 88%, var(--blob-3), transparent 72%);
-  filter: blur(30px);
-  transform: translateZ(0);
+    radial-gradient(38% 30% at 22% 12%, var(--blob-1), transparent 72%),
+    radial-gradient(42% 32% at 84% 26%, var(--blob-2), transparent 72%),
+    radial-gradient(46% 34% at 50% 88%, var(--blob-3), transparent 74%);
 }
 
 button, input, select, textarea {
@@ -214,9 +261,11 @@ p { margin: 0; }
   z-index: 1;
   max-width: var(--shell);
   margin: 0 auto;
-  padding: 0 var(--pad) calc(150px + var(--safe-b));
+  /* Clears the tab bar (12+65) and the action bar stacked above it (93+52). */
+  padding: 0 var(--pad) calc(162px + var(--safe-b));
   min-height: 100dvh;
 }
+#app.no-fab { padding-bottom: calc(96px + var(--safe-b)); }
 
 .stack { display: grid; gap: 12px; }
 .stack-sm { display: grid; gap: 8px; }

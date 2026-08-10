@@ -2,13 +2,14 @@
    Dashboard — everything about today on one screen.
    ========================================================================== */
 
-import { esc, clamp, fmtVolume, haptic } from '../../core/utils.js';
+import { esc, clamp, fmtVolume, haptic, isToday, nowTime } from '../../core/utils.js';
 import * as store from '../../core/store.js';
 import { icon } from '../icons.js';
 import {
   ring, macroBars, gauge, listRow, thumb, emptyState, sectionTitle, adviceList, workoutRow,
 } from '../components.js';
 import { coachLine, recommendations, microScore, recoveryScore, trainingScore, nutrientIssues } from '../../domain/analysis.js';
+import { slotPlan } from '../../domain/targets.js';
 import { toast } from '../toast.js';
 
 export const id = 'day';
@@ -70,6 +71,8 @@ export function render(ctx) {
       <div class="hint">${scoreHint(recovery, training, micro)}</div>
     </section>
 
+    ${slotCard(ctx)}
+
     ${waterCard(ctx)}
 
     ${tips.length ? `${sectionTitle('Na teraz')}${adviceList(tips)}` : ''}
@@ -93,6 +96,47 @@ function scoreHint(recovery, training, micro) {
   if (micro < 55) return 'Mikroskładniki poniżej normy — sprawdź zakładkę Mikro, które dokładnie.';
   if (training.todayLoad === 0) return 'Dzień bez treningu. Cele kaloryczne są już do tego dopasowane.';
   return 'Wszystkie trzy wskaźniki liczą się z dzisiejszych wpisów i aktualizują na bieżąco.';
+}
+
+/**
+ * Where the day's energy has gone, meal by meal.
+ *
+ * A single daily number cannot answer the question actually being asked at
+ * 16:00 — "how much is left for dinner". The plan from `slotPlan` is set
+ * against what each slot has actually taken, and the slot the clock is in is
+ * called out, so the remaining budget is attached to the next thing eaten
+ * rather than to the day as a whole.
+ */
+function slotCard(ctx) {
+  const { day, targets } = ctx;
+  const plan = slotPlan(targets);
+
+  const eaten = new Map(plan.map((p) => [p.slot, 0]));
+  for (const meal of day.meals || []) {
+    const slot = eaten.has(meal.slot) ? meal.slot : store.guessSlot(meal.time);
+    eaten.set(slot, (eaten.get(slot) || 0) + (meal.totals?.kcal || 0));
+  }
+
+  const now = isToday(ctx.key) ? store.guessSlot(nowTime()) : null;
+
+  return `
+    ${sectionTitle('Rozkład dnia')}
+    <section class="glass pad slots">
+      ${plan.map((p) => {
+    const has = Math.round(eaten.get(p.slot) || 0);
+    const left = p.kcal - has;
+    const pct = p.kcal ? clamp(has / p.kcal, 0, 1) * 100 : 0;
+    const over = has > p.kcal * 1.12;
+    return `
+        <div class="slot-row${p.slot === now ? ' now' : ''}">
+          <div class="slot-name">${esc(p.name)}${p.slot === now ? '<i>teraz</i>' : ''}</div>
+          <div class="slot-val num">${has} / ${p.kcal}</div>
+          <div class="slot-track"><div class="slot-fill${over ? ' over' : ''}" style="width:${pct}%"></div></div>
+          <div class="slot-left num${left < 0 ? ' over' : ''}">${left >= 0 ? `zostało ${left}` : `ponad ${-left}`}</div>
+        </div>`;
+  }).join('')}
+      <p class="note" style="margin:14px 4px 0">Podział 24 / 30 / 24 / 22 % dziennej energii. Posiłek trafia do pory dnia, o której go zapisano — możesz ją zmienić w edytorze.</p>
+    </section>`;
 }
 
 function waterCard(ctx) {

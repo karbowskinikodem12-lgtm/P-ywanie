@@ -107,6 +107,37 @@
 .water-actions { display: flex; gap: 8px; margin-top: 14px; }
 .water-actions button { flex: 1; }
 
+/* ---------- meal-slot breakdown ---------- */
+.slots .slot-row {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 4px 10px;
+  align-items: baseline;
+  padding: 9px 0;
+}
+.slots .slot-row + .slot-row { border-top: .5px solid var(--sep); }
+.slot-name { font-size: 15px; font-weight: 600; display: flex; align-items: center; gap: 7px; }
+.slot-name i {
+  font-style: normal; font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
+  padding: 2px 7px; border-radius: 99px;
+  background: rgba(0, 122, 255, .14); color: var(--blue);
+}
+.slot-val { font-size: 13px; color: var(--sub); }
+.slot-track {
+  grid-column: 1 / -1; height: 6px; border-radius: 99px;
+  background: var(--track); overflow: hidden;
+  box-shadow: inset 0 1px 2px rgba(16, 42, 66, .14);
+}
+.slot-fill {
+  height: 100%; border-radius: 99px; width: 0;
+  background: linear-gradient(90deg, var(--mint), var(--blue));
+  transition: width .55s var(--ease);
+}
+.slot-fill.over { background: var(--grad-warn); }
+.slot-left { grid-column: 1 / -1; font-size: 12px; color: var(--sub); }
+.slot-left.over { color: var(--orange); font-weight: 600; }
+.slot-row.now .slot-name { color: var(--text); }
+
 /* ---------- score gauges card ---------- */
 .scores { padding: 18px 16px 16px; }
 .scores .hint { font-size: 13px; color: var(--sub); margin-top: 14px; line-height: 1.45; text-align: center; }
@@ -148,6 +179,20 @@
 }
 .progress-line i { display: block; height: 100%; background: var(--grad-primary); width: 0; transition: width .4s var(--ease); }
 
+/* The meal title doubles as the rename button. Inline styles gave it the
+   heading's own 28px height; the padding below buys the 44pt target and is
+   pulled straight back out so the heading sits where it always did. */
+.meal-rename {
+  width: 100%;
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  /* 9px, not 8: the heading's line box is 27.6px, so 8px each side lands at
+     43.6 — a fifth of a pixel short of the 44pt it is here to reach. */
+  padding: 9px 0;
+  margin: -9px 0;
+}
+
 /* detected ingredient rows */
 .ing-list { display: grid; gap: 8px; margin-bottom: 14px; }
 .ing {
@@ -169,20 +214,50 @@
 .ing .conf-fill { height: 100%; border-radius: 99px; background: var(--green); transition: width .5s var(--ease); }
 .ing .conf-fill.mid { background: var(--orange); }
 .ing .conf-fill.lo { background: var(--red); }
-.ing .acts { display: flex; gap: 6px; }
+/* The gap is 14px for a reason: the discs stay 30px so three still fit beside
+   the name and the calories, but each carries an invisible 44pt hit area, and
+   14px of gap is exactly what makes those areas tile edge to edge instead of
+   overlapping. At the old 6px they overlapped by 8px — and since one of the
+   three is "delete", a tap aimed at swap could land on it. */
+.ing .acts { display: flex; gap: 14px; }
 .ing .acts button {
   width: 30px; height: 30px; border-radius: 50%; background: var(--track);
   display: grid; place-items: center; color: var(--sub);
   transition: transform var(--dur-fast) var(--ease);
+  position: relative;
+}
+.ing .acts button::after {
+  content: ""; position: absolute; top: 50%; left: 50%;
+  width: 44px; height: 44px; transform: translate(-50%, -50%);
+  border-radius: 50%;
 }
 .ing .acts button:active { transform: scale(.88); }
 .ing .acts svg { width: 15px; height: 15px; stroke: currentColor; fill: none; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
 .ing.editing { box-shadow: inset 0 0 0 1.5px var(--blue); }
 
 /* alternates offered for a one-tap correction */
-.alts { display: flex; gap: 6px; overflow-x: auto; padding: 2px 0 4px; margin: 0 0 12px; scrollbar-width: none; }
+/* `overflow-x: auto` forces overflow-y to compute to `auto` as well, so this
+   row is a scrollport that clips its children. The vertical padding is what
+   lets a chip's 44pt hit overlay live inside it — at the old 2/4px the
+   scrollport was 40px and the overlay was cut back to it. */
+.alts { display: flex; gap: 6px; overflow-x: auto; padding: 7px 0 9px; margin: 0 0 6px; scrollbar-width: none; }
 .alts::-webkit-scrollbar { display: none; }
 .alts .chip { flex: none; }
+
+/* repeat a meal already logged */
+.repeats { display: grid; gap: 8px; margin-bottom: 4px; }
+.repeat {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  width: 100%; min-height: 48px;
+  padding: 11px 14px;
+  border-radius: 16px;
+  background: var(--fill);
+  text-align: left;
+  transition: transform var(--dur-fast) var(--ease), background var(--dur);
+}
+.repeat:active { transform: scale(.97); background: var(--track); }
+.repeat .r-name { font-size: 15.5px; font-weight: 600; min-width: 0; }
+.repeat .r-meta { font-size: 12.5px; color: var(--sub); white-space: nowrap; flex: none; }
 
 /* food search */
 .search-box {
@@ -199,7 +274,14 @@
 .portion .ph { display: flex; justify-content: space-between; align-items: baseline; font-size: 14px; color: var(--sub); font-weight: 500; }
 .portion .ph b { font-size: 19px; color: var(--text); font-variant-numeric: tabular-nums; font-weight: 600; }
 .portion .presets { display: flex; gap: 6px; margin-top: 12px; }
-.portion .presets button { flex: 1; padding: 7px 4px; border-radius: 11px; background: var(--track); font-size: 12.5px; font-weight: 600; color: var(--text-2); }
+/* min-height, not padding: these sat at 29px, well under the 44pt iOS floor. */
+.portion .presets button {
+  flex: 1; min-height: 44px; padding: 7px 4px;
+  border-radius: 13px; background: var(--track);
+  font-size: 12.5px; font-weight: 600; color: var(--text-2);
+  transition: transform var(--dur-fast) var(--ease), background var(--dur);
+}
+.portion .presets button:active { transform: scale(.94); }
 .portion .presets button[aria-pressed="true"] { background: var(--blue); color: #fff; }
 
 /* engine status pill */

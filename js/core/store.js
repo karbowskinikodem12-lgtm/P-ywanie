@@ -278,6 +278,49 @@ export function dayKeys() {
   return Object.keys(state.days).sort();
 }
 
+/**
+ * Meals worth offering again, so a repeat breakfast is one tap rather than a
+ * search and a portion dialog.
+ *
+ * Grouped by name, because that is what "the same meal" means to the person
+ * logging it — an oatmeal weighed at 78 g and at 82 g is not two meals. The
+ * newest instance of a name supplies the portions, so the offer tracks how the
+ * meal is actually eaten now rather than how it was the first time.
+ *
+ * Ranked by how often it has been logged, recency breaking ties. Early on
+ * everything has been logged once, so recency is what orders the list, which
+ * is the right behaviour for a fresh diary.
+ */
+export function repeatableMeals({ limit = 6 } = {}) {
+  const byName = new Map();
+
+  for (const day of Object.values(state.days)) {
+    for (const meal of day.meals || []) {
+      // Without items there is nothing to re-create; legacy records carry a
+      // single synthetic row and are still perfectly repeatable.
+      if (!meal.items?.length) continue;
+      const key = (meal.name || '').trim().toLowerCase();
+      if (!key) continue;
+
+      const seen = byName.get(key);
+      if (!seen) {
+        byName.set(key, { meal, count: 1, last: meal.ts || 0 });
+        continue;
+      }
+      seen.count += 1;
+      if ((meal.ts || 0) >= seen.last) {
+        seen.meal = meal;
+        seen.last = meal.ts || 0;
+      }
+    }
+  }
+
+  return [...byName.values()]
+    .sort((a, b) => b.count - a.count || b.last - a.last)
+    .slice(0, limit)
+    .map(({ meal, count }) => ({ meal, count }));
+}
+
 function ensureDay(key) {
   if (!state.days[key]) state.days[key] = emptyDay(key);
   return state.days[key];

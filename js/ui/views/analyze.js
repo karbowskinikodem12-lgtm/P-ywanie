@@ -181,9 +181,9 @@ function editorHtml() {
         <div class="shot-badge">${icon(session.engine === 'model' ? 'cpu' : 'sparkles', { size: 13 })}${esc(engineLabel)}</div>
       </div>` : ''}
 
-    <div class="spread" style="align-items:flex-start;margin-bottom:6px">
+    <div class="spread" style="align-items:flex-start;margin-bottom:14px">
       <h2 class="grow" style="min-width:0">
-        <button data-action="meal:rename" style="text-align:left;font:inherit;color:inherit;width:100%">
+        <button class="meal-rename" data-action="meal:rename">
           ${esc(session.name)} ${icon('edit', { size: 15, cls: 'edit-mark' })}
         </button>
       </h2>
@@ -304,10 +304,31 @@ function wireEditor() {
  *   title            — sheet heading
  *   category         — initial category filter
  */
-export function openSearch(ctx, { onPick, title = 'Znajdź jedzenie', initial = '' } = {}) {
+/**
+ * @param {object} opts
+ *   onPick(item)     — required
+ *   title            — sheet heading
+ *   repeats          — optional [{meal, count}] offered above the search while
+ *                      the query is empty; picking one calls onRepeat(meal)
+ */
+export function openSearch(ctx, {
+  onPick, onRepeat = null, repeats = [], title = 'Znajdź jedzenie', initial = '',
+} = {}) {
   const priors = ctx.state.learning.priors || {};
   let category = null;
   let query = initial;
+
+  // Only while browsing: once someone is typing, they are looking for
+  // something specific and the shortcuts are just noise in the way.
+  const repeatsHtml = () => (!repeats.length || query ? '' : `
+    <div class="input-label" style="margin-top:16px">Powtórz</div>
+    <div class="repeats">
+      ${repeats.map(({ meal, count }) => `
+        <button class="repeat" data-repeat="${esc(meal.id)}">
+          <span class="r-name t-ellipsis">${esc(meal.name)}</span>
+          <span class="r-meta num">${Math.round(meal.totals?.kcal || 0)} kcal · ${Math.round(meal.grams || 0)} g${count > 1 ? ` · ${count}×` : ''}</span>
+        </button>`).join('')}
+    </div>`);
 
   const html = () => `
     <div class="grab"></div>
@@ -317,6 +338,7 @@ export function openSearch(ctx, { onPick, title = 'Znajdź jedzenie', initial = 
       <input id="foodSearch" type="search" inputmode="search" autocomplete="off"
         aria-label="Szukaj produktu lub dania" placeholder="np. owsianka, kurczak, banan" value="${esc(query)}">
     </div>
+    <div id="repeatRow">${repeatsHtml()}</div>
     <div class="alts" id="catRow">
       <button class="chip chip-tap${category ? '' : ' chip-on'}" data-cat="">Wszystko</button>
       ${CATEGORIES.map((c) => `<button class="chip chip-tap${category === c.id ? ' chip-on' : ''}" data-cat="${c.id}">${c.emoji} ${esc(c.name)}</button>`).join('')}
@@ -325,10 +347,21 @@ export function openSearch(ctx, { onPick, title = 'Znajdź jedzenie', initial = 
 
   const handle = sheet.open(html(), { label: title });
 
+  document.getElementById('repeatRow')?.addEventListener('click', (e) => {
+    const btn = e.target.closest('[data-repeat]');
+    if (!btn) return;
+    const found = repeats.find((r) => r.meal.id === btn.dataset.repeat);
+    if (found) onRepeat?.(found.meal);
+  });
+
   const input = document.getElementById('foodSearch');
   const results = document.getElementById('foodResults');
 
-  const refresh = () => { results.innerHTML = resultsHtml(query, category, priors); };
+  const repeatRow = document.getElementById('repeatRow');
+  const refresh = () => {
+    results.innerHTML = resultsHtml(query, category, priors);
+    if (repeatRow) repeatRow.innerHTML = repeatsHtml();
+  };
   const onInput = debounce(() => { query = input.value; refresh(); }, 120);
 
   input?.addEventListener('input', onInput);
@@ -432,9 +465,54 @@ export function openPortion(ctx, { foodId, grams, onConfirm, title = null }) {
    Manual meal (search → build)
    ========================================================================== */
 
+/**
+ * Log a previously eaten meal again, on the selected day and at the current
+ * time. Nutrition is recomputed from the ingredients rather than copied, so a
+ * repeat reflects the food table as it stands today; legacy rows that carry
+ * their own frozen figures are handled by `totalsForItems`.
+ *
+ * The photo is deliberately not carried over — it is a picture of the earlier
+ * plate, and passing its id on would leave two meals owning one image, so
+ * deleting either would pull the picture out from under the other.
+ */
+function repeatMeal(ctx, template) {
+  const items = (template.items || []).map(({ uid: _u, ...rest }) => ({ ...rest }));
+  if (!items.length) return;
+
+  const time = nowTime();
+  const record = store.addMeal({
+    name: template.name,
+    time,
+    slot: guessSlot(time),
+    grams: Math.round(items.reduce((s, it) => s + (+it.grams || 0), 0)),
+    items,
+    totals: totalsForItems(items),
+    thumbId: null,
+    photoId: null,
+    source: 'repeat',
+    confidence: 1,
+    signature: null,
+  }, ctx.key);
+
+  sheet.close();
+  ctx.render();
+  haptic('ok');
+
+  toast(`Dodano „${template.name}”`, {
+    duration: 5000,
+    actionLabel: 'Cofnij',
+    onAction: () => {
+      store.removeMeal(record.id, ctx.key);
+      ctx.render();
+    },
+  });
+}
+
 export function startManual(ctx) {
   openSearch(ctx, {
     title: 'Dodaj posiłek',
+    repeats: store.repeatableMeals({ limit: 6 }),
+    onRepeat: (meal) => repeatMeal(ctx, meal),
     onPick: (item) => {
       openPortion(ctx, {
         foodId: item.id,

@@ -272,7 +272,9 @@ p { margin: 0; }
 .row-flex { display: flex; align-items: center; gap: 10px; }
 .spread { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .grow { flex: 1; min-width: 0; }
-.wrap { display: flex; flex-wrap: wrap; gap: 8px; }
+/* 10px, not 8: a wrapped row of 34px chips carrying 44pt hit overlays needs
+   34 + gap >= 44 for those overlays to tile rather than overlap. */
+.wrap { display: flex; flex-wrap: wrap; gap: 10px; }
 .hidden { display: none !important; }
 
 .section-title {

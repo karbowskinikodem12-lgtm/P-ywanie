@@ -5,7 +5,8 @@ Progresywna aplikacja webowa (PWA) do prowadzenia dziennika żywienia i treningu
 dla pływaka trenującego wyczynowo. Rozpoznaje posiłek ze zdjęcia, liczy 31
 składników odżywczych, dopasowuje cele do faktycznie wykonanego treningu i
 działa offline. Zdjęcie jest skrótem, nie wymogiem — przycisk z ołówkiem obok
-przycisku aparatu dodaje posiłek od razu przez wyszukiwarkę produktów.
+przycisku aparatu dodaje posiłek od razu przez wyszukiwarkę produktów, a posiłek
+jedzony regularnie wraca jednym dotknięciem z sekcji „Powtórz”.
 
 **Wszystko dzieje się na urządzeniu.** Zdjęcia i dane nie są nigdzie wysyłane,
 nie ma konta ani serwera. Jedyne zapytanie sieciowe to jednorazowe pobranie
@@ -132,6 +133,44 @@ możliwe do wyczyszczenia w ustawieniach:
 | `priors` | ile razy dany produkt został potwierdzony | częste posiłki wygrywają remisy |
 | `signatures` | sygnatura zdjęcia → potwierdzone danie | rozpoznawanie powtarzalnych posiłków |
 | `portions` | zwykła gramatura użytkownika | trafniejsze szacowanie porcji |
+
+---
+
+## Powtarzanie posiłków
+
+Dziennik żywienia stoi codziennością: ta sama owsianka rano, ta sama kanapka po
+treningu. Sekcja „Powtórz” w oknie dodawania posiłku pokazuje to, co jest jadane
+najczęściej, i wstawia cały posiłek — wszystkie składniki wraz z gramaturą —
+jednym dotknięciem.
+
+Posiłki grupowane są po nazwie, bo tym właśnie jest „ten sam posiłek” dla osoby,
+która go zapisuje: owsianka odważona raz na 78 g, a raz na 82 g to nie są dwa
+różne posiłki. Gramaturę podaje **najnowsze** wystąpienie nazwy, więc podpowiedź
+nadąża za tym, jak posiłek jest jedzony teraz, a nie jak wyglądał za pierwszym
+razem. Kolejność wyznacza częstość, a przy remisie świeżość — na starcie, gdy
+wszystko było jedzone raz, listę porządkuje więc świeżość, co jest właściwym
+zachowaniem dla pustego dziennika.
+
+Wartości odżywcze są **przeliczane od nowa** ze składników, a nie kopiowane, więc
+powtórzenie odzwierciedla aktualną bazę produktów. Zdjęcie celowo nie jest
+przenoszone: to fotografia tamtego talerza, a przekazanie jej identyfikatora
+dałoby dwa posiłki władające jednym obrazem — usunięcie któregokolwiek wyjęłoby
+zdjęcie spod drugiego.
+
+---
+
+## Rozkład dnia na posiłki
+
+Jedna liczba dzienna nie odpowiada na pytanie zadawane o 16:00: „ile mi zostało
+na kolację”. Pulpit rozkłada więc cel energetyczny na cztery pory dnia
+(24 / 30 / 24 / 22 %) i zestawia go z tym, co faktycznie do każdej z nich
+trafiło, wyróżniając porę, w której jest zegar.
+
+Planer istniał w kodzie od dawna, ale nigdy nie został podłączony — i modelował
+**pięć** pór, dzieląc przekąski na `snack1` i `snack2`, podczas gdy zapisany
+posiłek może nieść tylko jedną z czterech. Planowanej i zjedzonej strony nie dało
+się więc zestawić. Przydziały przekąskowe są teraz połączone, a ostatnia pozycja
+domyka zaokrąglenia, żeby części sumowały się dokładnie do celu dnia.
 
 ---
 
@@ -263,6 +302,11 @@ tkwić na starej wersji, mając nową tuż obok.
   `--blue` na tej pigułce mierzy 3,4:1 i nie przechodzi AA.
 - Wszystkie cele dotknięcia co najmniej 44 pt zgodnie z iOS HIG; wyjątkiem są
   segmentowane przełączniki (36 pt, tyle co systemowe) i słupki wykresu.
+  Liczy się faktyczne pole trafienia, nie rozmiar wizualny: chipy i okrągłe
+  przyciski w edytorze posiłku zostają małe, a zasięg niesie niewidoczna
+  nakładka. Kontenery są pod nią dobrane — `.alts` jest oknem przewijania,
+  które przycinało nakładkę do 40 px, a `.wrap` potrzebuje 10 px odstępu, żeby
+  nakładki sąsiednich wierszy stykały się zamiast nachodzić.
 - Każdy element sterujący ma nazwę dla czytnika ekranu, każde pole — etykietę.
 - Panel dolny: pułapka focusu, zamykanie klawiszem Escape, gestem i przyciskiem
   wstecz. Gest obsłużony przez Pointer Events, więc działa palcem i myszą.

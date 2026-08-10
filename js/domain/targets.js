@@ -183,25 +183,43 @@ export function explainTargets(targets) {
     + (m.phase.kcal !== 1 ? ` · korekta na fazę „${m.phase.name}”` : '');
 }
 
-/** Split the day's energy into meal slots — used by reminders and coaching. */
-export function slotPlan(targets) {
-  const k = targets.kcal;
-  return [
-    { slot: 'breakfast', name: 'Śniadanie', kcal: Math.round(k * 0.24) },
-    { slot: 'snack1', name: 'Przekąska', kcal: Math.round(k * 0.10) },
-    { slot: 'lunch', name: 'Obiad', kcal: Math.round(k * 0.30) },
-    { slot: 'snack2', name: 'Po treningu', kcal: Math.round(k * 0.14) },
-    { slot: 'dinner', name: 'Kolacja', kcal: Math.round(k * 0.22) },
-  ];
-}
-
+/* The four a saved meal can carry, plus the two reminder kinds that name a
+   moment rather than a slot. `snack1`/`snack2` are gone with the five-slot
+   plan that was the only thing producing them. */
 export const SLOT_NAMES = {
   breakfast: 'Śniadanie',
   snack: 'Przekąska',
-  snack1: 'Przekąska',
-  snack2: 'Po treningu',
   lunch: 'Obiad',
   dinner: 'Kolacja',
   preworkout: 'Przed treningiem',
   postworkout: 'Po treningu',
 };
+
+/**
+ * Split the day's energy across the meal slots.
+ *
+ * The four slots here are exactly the ones a saved meal can carry: `guessSlot`
+ * and the editor's slot cycle only ever produce breakfast / snack / lunch /
+ * dinner. This used to model five, splitting snacks into `snack1` and `snack2`,
+ * which no meal could ever be filed under — so the planned and the eaten side
+ * could never be lined up. The two snack allocations are merged instead.
+ */
+export function slotPlan(targets) {
+  const k = +targets.kcal || 0;
+  const shares = [
+    { slot: 'breakfast', name: SLOT_NAMES.breakfast, share: 0.24 },
+    { slot: 'lunch', name: SLOT_NAMES.lunch, share: 0.30 },
+    { slot: 'snack', name: SLOT_NAMES.snack, share: 0.24 },
+    { slot: 'dinner', name: SLOT_NAMES.dinner, share: 0.22 },
+  ];
+  // These numbers are shown side by side with the day's total, so the parts
+  // have to add up to it exactly; rounding each share on its own drifts by a
+  // kcal or two. The last slot takes whatever the others left.
+  let used = 0;
+  return shares.map((s, i) => {
+    const kcal = i === shares.length - 1 ? k - used : Math.round(k * s.share);
+    used += kcal;
+    return { ...s, kcal };
+  });
+}
+

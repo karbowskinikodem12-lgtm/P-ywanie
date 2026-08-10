@@ -100,10 +100,24 @@
   :root:not([data-theme="light"]) .chip-mid { color: #FFB340; }
   :root:not([data-theme="light"]) .chip-lo { color: #FF6961; }
 }
+/* A tappable chip stays a 34px pill — that is the whole point of a chip — but
+   the *target* reaches the 44pt iOS asks for. The extra height is carried by
+   an invisible overlay so the pill's own metrics are untouched.
+   Two things have to hold for that overlay to be real, and both are set where
+   the containers are defined rather than here: a scrolling chip row (`.alts`)
+   needs vertical padding, because `overflow-x: auto` makes it a scrollport
+   that would otherwise clip the overlay back to the pill; and a wrapping row
+   (`.wrap`) needs a gap of at least 44 - 34, or the overlays of two lines
+   overlap and the lower chip swallows taps meant for the upper one. */
 .chip-tap {
   cursor: pointer;
   transition: transform var(--dur-fast) var(--ease);
   min-height: 34px;
+  position: relative;
+}
+.chip-tap::after {
+  content: ""; position: absolute; left: 0; right: 0; top: 50%;
+  height: 44px; transform: translateY(-50%);
 }
 .chip-tap:active { transform: scale(.94); }
 .chip-on { background: var(--blue); color: #fff; }

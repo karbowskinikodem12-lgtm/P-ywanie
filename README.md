@@ -159,6 +159,20 @@ samo: odrzucenie prawdziwej kolacji odsyła człowieka po zdjęcie, które było
 dobre, a przyjęcie wątpliwej kosztuje jedno dotknięcie w alternatywę. Negatyw
 musi więc wygrać wyraźnie, nie remisować.
 
+**Jak to sprawdzić na własnym telefonie.** Czy werdykt był słuszny, nie da się
+rozstrzygnąć ze zrzutu ekranu, a wag modelu nie da się pobrać z każdego
+środowiska — więc zamiast się o to spierać, Ustawienia → Rozpoznawanie zdjęć →
+Szczegóły pokazują **surowe liczby, z których decyzja zapadła**: najlepsze
+jedzenie, trzy najwyżej ocenione etykiety „to nie jedzenie” i wynikowa pewność.
+Jeśli aplikacja nazwie posiłkiem zdjęcie pokoju, widać tam, czy negatywy
+przegrały i o ile — a to jest już diagnoza, nie domysł.
+
+Obok tego Ustawienia → Dane pokazują **wersję aplikacji**. Bez kroku budowania
+nic nie stempluje plików numerem, a telefon trzymający starego service workera
+renderuje starą aplikację bez zarzutu — więc „czy to naprawione” i „czy to do
+mnie dotarło” wyglądają identycznie. To już raz kosztowało rundę diagnozowania
+błędu, który po prostu nie był jeszcze wdrożony.
+
 **Czego to nie naprawia.** Tylko model potrafi odmówić. Tryb wspomagany to
 dopasowanie barwy i tekstury — nie ma pojęcia „nie jedzenie" i przy zdjęciu
 podłogi nadal zaproponuje posiłek. Dlatego jego pewność jest z góry ograniczona

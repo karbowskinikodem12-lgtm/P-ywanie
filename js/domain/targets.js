@@ -13,7 +13,7 @@
 
 import { NUTRIENTS, NUTRIENT_KEYS, emptyTotals } from '../data/nutrients.js';
 import { burnFor, sweatFor, carbNeedFor, loadFor, getPhase } from '../data/exercise.js';
-import { clamp, round } from '../core/utils.js';
+import { clamp, round, dayKey } from '../core/utils.js';
 
 /** Resting metabolic rate, kcal/day. */
 export function bmr({ sex, weight, height, age }) {
@@ -36,6 +36,53 @@ export function plannedTrainingKcal(profile, training) {
   const pool = burnFor({ type: 'swim', intensity: 'moderate', minutes: (+training.poolHoursWeek || 0) * 60, weight });
   const dry = burnFor({ type: 'gym', intensity: 'moderate', minutes: (+training.dryHoursWeek || 0) * 60, weight });
   return Math.round((pool + dry) / 7);
+}
+
+/**
+ * Training energy the day's target should be built on.
+ *
+ * Logged sessions replace the planned share rather than stacking on top of it,
+ * or the plan would be counted twice. The flaw was that they replaced the
+ * *whole day's* plan with whatever had been logged so far — and `sessionsPerDay`,
+ * which the profile has always collected, was read by nothing at all. So a
+ * swimmer on two sessions a day who logged the morning one was telling the app
+ * "that was the day", and the calorie goal dropped by hundreds while a second
+ * session was still ahead of them. Training is supposed to earn food, not cost
+ * it, and that is the shape the bug took.
+ *
+ * Sessions still expected today are therefore counted at the plan's per-session
+ * rate, and that allowance fades across the evening: at some point no third
+ * swim is coming, and by bedtime the target should reflect only what actually
+ * happened. Past days never get the allowance — nothing is still to come.
+ */
+export function trainingEnergyForDay({
+  dayKeyStr, workouts = [], demand, planned, sessionsPerDay = 1, now = new Date(),
+}) {
+  const logged = workouts.length;
+  if (!logged) return planned;
+
+  const isToday = dayKeyStr === dayKey(now);
+  if (!isToday) return demand.kcal;
+
+  const perDay = Math.max(1, Math.round(+sessionsPerDay || 1));
+  const remaining = Math.max(0, perDay - logged);
+  if (!remaining) return demand.kcal;
+
+  // Full allowance through the afternoon, gone by 21:00.
+  const hour = now.getHours() + now.getMinutes() / 60;
+  const stillLikely = clamp((21 - hour) / 4, 0, 1);
+
+  const perSession = planned / perDay;
+  return Math.round(demand.kcal + remaining * perSession * stillLikely);
+}
+
+/** The part of the target being held back for sessions still expected today. */
+export function reservedForLater({
+  dayKeyStr, workouts = [], demand, planned, sessionsPerDay = 1, now = new Date(),
+}) {
+  if (!workouts.length) return 0;
+  const total = trainingEnergyForDay({ dayKeyStr, workouts, demand, planned, sessionsPerDay, now });
+  return Math.max(0, Math.round(total - demand.kcal));
 }
 
 export function plannedDailyLoad(training) {
@@ -73,9 +120,10 @@ export function computeTargets(state, dayKeyStr, day) {
   const baseline = Math.round(rmr * NEAT_FACTOR);
   const planned = plannedTrainingKcal(profile, training);
 
-  // Logged sessions replace the planned share; an empty day keeps the plan so
-  // the ring is meaningful in the morning.
-  const trainingKcal = workouts.length ? demand.kcal : planned;
+  const trainingKcal = trainingEnergyForDay({
+    dayKeyStr, workouts, demand, planned, sessionsPerDay: training.sessionsPerDay,
+  });
+  const reserved = Math.max(0, trainingKcal - (workouts.length ? demand.kcal : trainingKcal));
 
   let kcal = Math.round((baseline + trainingKcal) * phase.kcal);
 
@@ -164,6 +212,9 @@ export function computeTargets(state, dayKeyStr, day) {
       bmr: rmr,
       baseline,
       trainingKcal,
+      reserved,
+      sessionsLogged: workouts.length,
+      sessionsPerDay: Math.max(1, Math.round(+training.sessionsPerDay || 1)),
       plannedTrainingKcal: planned,
       demand,
       phase,
@@ -179,8 +230,22 @@ export function computeTargets(state, dayKeyStr, day) {
 export function explainTargets(targets) {
   const m = targets.meta;
   if (m.manual) return 'Cele ustawione ręcznie w profilu.';
-  return `${m.baseline} kcal na podtrzymanie + ${m.trainingKcal} kcal z treningu`
-    + (m.phase.kcal !== 1 ? ` · korekta na fazę „${m.phase.name}”` : '');
+
+  const base = `${m.baseline} kcal na podtrzymanie + ${m.trainingKcal} kcal z treningu`;
+  const phase = m.phase.kcal !== 1 ? ` · korekta na fazę „${m.phase.name}”` : '';
+
+  // Without this the number moves on its own and looks arbitrary: the target
+  // is holding energy back for a session that has not happened yet.
+  if (m.reserved > 0) {
+    const left = m.sessionsPerDay - m.sessionsLogged;
+    return `${base}${phase}. W tym ${m.reserved} kcal zarezerwowane na `
+      + `${left === 1 ? 'jeszcze jedną sesję' : `jeszcze ${left} sesje`} z Twojego planu — `
+      + 'im później, tym mniej, a po wpisaniu jej cel przeliczy się na fakty.';
+  }
+  if (m.sessionsLogged === 0) {
+    return `${base}${phase}. Dopóki nie wpiszesz treningu, liczy się średnia z Twojego planu tygodnia.`;
+  }
+  return `${base}${phase}`;
 }
 
 /* The four a saved meal can carry, plus the two reminder kinds that name a

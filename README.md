@@ -286,7 +286,23 @@ domyka zaokrąglenia, żeby części sumowały się dokładnie do celu dnia.
 
 - **Energia** — Mifflin-St Jeor + 1,35 (aktywność poza treningiem) + energia
   sesji. Dopóki nie ma wpisanego treningu, używany jest średni koszt z planu
-  tygodnia; po wpisaniu sesji plan jest **zastępowany**, a nie sumowany.
+  tygodnia; po wpisaniu sesji plan jest **zastępowany**, a nie sumowany —
+  inaczej policzyłby się dwa razy. Zastępowana jest jednak tylko część
+  przypadająca na sesje **już wpisane**: te, które według planu dopiero
+  nastąpią, wciąż liczą się po stawce planu.
+
+  To była realna usterka. `sessionsPerDay` siedziało w profilu od początku i
+  **nie było czytane przez nic**, więc pływak trenujący dwa razy dziennie,
+  wpisując poranną sesję, mówił aplikacji „to był cały dzień" — i cel spadał o
+  kilkaset kalorii, mimo że druga sesja była dopiero przed nim. Przy planie
+  14 h + 3 h tygodniowo wpisanie treningu 90 min **obniżało** cel o 475 kcal;
+  teraz **podnosi** go o 191. Trening ma zarabiać na jedzenie, nie kosztować.
+
+  Rezerwa na sesje jeszcze nieodbyte **wygasa przez wieczór** — o którejś
+  godzinie trzeci trening już nie nastąpi, a przed snem cel ma odzwierciedlać
+  to, co faktycznie się wydarzyło. Dni minione nigdy jej nie dostają. Cała ta
+  arytmetyka jest wypisana wprost w „Cele dnia”, żeby liczba nie zmieniała się
+  po cichu.
 - **Białko** — 1,7–2,3 g/kg zależnie od fazy i objętości dnia.
 - **Węglowodany** — 3–11 g/kg sterowane obciążeniem sesji, bo to ono opróżnia
   glikogen.

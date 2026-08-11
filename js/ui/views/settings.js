@@ -4,6 +4,7 @@
 
 import { esc, fmtVolume, dayKey, WEEKDAYS_SHORT, haptic } from '../../core/utils.js';
 import * as store from '../../core/store.js';
+import { BUILD } from '../../core/build.js';
 import * as db from '../../core/db.js';
 import { icon } from '../icons.js';
 import * as sheet from '../sheet.js';
@@ -190,6 +191,7 @@ export function render(ctx) {
       <div class="field"><label>Zapis</label><span class="val" id="storageLine">${esc(db.tierLabel())}${save.at ? ` · ${save.at.toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' })}` : ''}</span></div>
       <div class="field"><label>Dni w historii</label><span class="val num">${Object.keys(state.days).filter((k) => store.hasDay(k)).length}</span></div>
       <div class="field"><label>Zajęte miejsce</label><span class="val num" id="usageLine">liczę…</span></div>
+      <div class="field"><label>Wersja aplikacji <span class="hint">pomaga sprawdzić, czy telefon pobrał już aktualizację</span></label><span class="val num">${esc(BUILD)}</span></div>
     </section>
     <button class="btn btn-quiet" style="margin-top:10px" data-action="data:export">${icon('download', { size: 18 })} Zapisz kopię do pliku</button>
     <button class="btn btn-quiet btn-block" data-action="data:import">${icon('upload', { size: 18 })} Wczytaj kopię</button>
@@ -325,6 +327,47 @@ function profileSheet(ctx) {
     </div>`, { label: 'Profil' });
 }
 
+/**
+ * The raw scores behind the last food / not-food call.
+ *
+ * Whether that call was right is not something a screenshot can settle, and
+ * the model weights are a download some environments cannot make — so rather
+ * than argue about it, the numbers the decision was made from are shown. If
+ * the recogniser names a meal for a photo of a room, this says whether the
+ * non-food labels lost, and by how much.
+ */
+function lastVerdictBlock() {
+  const v = model.state.lastVerdict;
+  if (!v) {
+    return callout('info', 'Zrób zdjęcie, a pojawią się tu surowe wyniki ostatniego rozpoznania — łącznie z tym, jak wysoko model ocenił etykiety „to nie jedzenie”.');
+  }
+
+  const pct = (x) => `${(x * 100).toFixed(1)}%`;
+  const when = new Date(v.at).toLocaleTimeString('pl-PL', { hour: '2-digit', minute: '2-digit' });
+  const food = v.topFood ? (getItem(v.topFood.id)?.name || v.topFood.id) : '—';
+
+  return `
+    <div class="input-label" style="margin-top:16px">Ostatnie rozpoznanie · ${esc(when)}</div>
+    <div class="glass list" style="box-shadow:none;background:var(--fill)">
+      <div class="item"><div class="grow"><div class="title">Werdykt</div>
+        <div class="meta">${v.isFood ? 'uznane za jedzenie' : 'odrzucone — nie jedzenie'}</div></div>
+        <div class="value" style="font-size:15px">${v.isFood ? '🍽️' : '🚫'}</div></div>
+      <div class="item"><div class="grow"><div class="title">Najlepsze jedzenie</div>
+        <div class="meta">${esc(food)}</div></div>
+        <div class="value num">${pct(v.topFood?.score || 0)}</div></div>
+      ${v.topRejects.map((r) => `
+        <div class="item"><div class="grow"><div class="title" style="font-weight:500">${esc(r.label)}</div>
+          <div class="meta">etykieta „to nie jedzenie”</div></div>
+          <div class="value num">${pct(r.score)}</div></div>`).join('')}
+      <div class="item"><div class="grow"><div class="title">Pewność, że to jedzenie</div>
+        <div class="meta">z czubków obu list, nie z sum</div></div>
+        <div class="value num">${pct(v.certainty)}</div></div>
+    </div>
+    <p class="note">Zdjęcie jest odrzucane, gdy najlepsza etykieta „to nie jedzenie” wyprzedzi najlepsze
+    jedzenie o ponad 15%. Jeśli tu widać, że przegrała mimo że na zdjęciu nie było jedzenia — to znaczy,
+    że tej sceny brakuje na liście negatywów.</p>`;
+}
+
 async function visionSheet(ctx) {
   caps = await probe(true);
   const engine = recommendEngine(caps, ctx.state.settings);
@@ -353,6 +396,8 @@ async function visionSheet(ctx) {
       ${model.state.error ? `<div class="item"><div class="grow"><div class="title">Ostatni błąd</div>
         <div class="meta">${esc(model.state.error)}</div></div></div>` : ''}
     </div>
+
+    ${lastVerdictBlock()}
 
     ${!caps.webgpu ? callout('info', 'To urządzenie nie udostępnia WebGPU. Model może działać na procesorze, ale wolniej — tryb wspomagany bywa wtedy szybszy i równie wygodny.') : ''}
 

@@ -67,6 +67,14 @@ const NOT_FOOD = [
   'a person', 'a close-up of a human face', 'hands', 'bare legs', 'feet',
   'clothing', 'a pair of blue jeans', 'a shirt', 'shoes',
   'a room interior', 'furniture', 'a sofa', 'a bed', 'a wooden floor', 'a wall',
+  // A wide shot of the room the meal is in, which is the failure this list
+  // grew for the second time: a photo of a ceiling and a kitchen came back as
+  // a pork cutlet. Naming the scene is only possible if the scene is on the
+  // list, and the food-adjacent ones have to be here precisely because they
+  // are the ones a food classifier will otherwise reach for.
+  'a ceiling', 'ceiling lights', 'a window', 'a doorway', 'a mirror',
+  'a kitchen', 'a dining room', 'a living room',
+  'people sitting around a table', 'a party', 'a restaurant interior',
   'a cat', 'a dog',
   'a car', 'a street', 'a building', 'a landscape', 'the sky', 'a houseplant',
   'a computer screen', 'a phone screen', 'a page of text', 'a receipt',
@@ -87,6 +95,16 @@ export const state = {
   error: null,
   loadedAt: null,
   lastMs: null,
+  /**
+   * Scores from the most recent classification, for the diagnostics sheet.
+   *
+   * The point is to make a disagreement checkable. Whether the food/not-food
+   * call is right cannot be reasoned out from a screenshot, and the weights
+   * are a download this project cannot make from every environment — so the
+   * numbers the decision was actually made from are put on screen instead of
+   * being argued about.
+   */
+  lastVerdict: null,
 };
 
 let pipe = null;
@@ -311,6 +329,14 @@ export async function classify(canvas, candidates, { topK = 6 } = {}) {
   rejects.sort((a, b) => b.score - a.score);
 
   const verdict = foodVerdict(foods, rejects);
+  state.lastVerdict = {
+    at: Date.now(),
+    isFood: verdict.isFood,
+    certainty: verdict.certainty,
+    topFood: foods[0] ? { id: foods[0].id, score: foods[0].score } : null,
+    topRejects: rejects.slice(0, 3).map((r) => ({ label: r.label, score: r.score })),
+    modelLabel: state.modelLabel,
+  };
 
   // Renormalised across foods: with negatives in the pool the raw scores no
   // longer sum to one over the menu, and downstream fusion assumes they do.

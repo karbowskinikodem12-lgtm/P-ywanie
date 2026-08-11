@@ -16,8 +16,38 @@
 import { signatureDistance } from './image.js';
 import { clamp } from '../core/utils.js';
 
-const MATCH_THRESHOLD = 0.16;   // cosine distance below which photos "look alike"
+/**
+ * Cosine distance below which two photos are treated as the same meal.
+ *
+ * Measured rather than chosen. The signature is sixteen non-negative numbers —
+ * twelve hue bins plus saturation, value, edge energy and food ratio — and
+ * cosine distance between non-negative vectors lives in a narrow band near
+ * zero, so this number is nowhere near as generous as it looks:
+ *
+ *   same dish, five shots varying light, framing, white balance   0.000 - 0.058
+ *   visually unrelated photos                                     0.028 upward
+ *
+ * The two ranges overlap, which is the real finding: no threshold separates
+ * them, because a brown cutlet and a red tomato dish genuinely have similar
+ * colour histograms. At the shipped 0.16, fourteen percent of unrelated pairs
+ * counted as the same meal — enough that one confirmed dish began winning
+ * every photo taken afterwards.
+ *
+ * So it sits below where unrelated photos start colliding, at the cost of
+ * missing repeats shot under a different white balance. Recognising fewer
+ * genuine repeats is a far smaller failure than naming the same dish for
+ * everything, and `matchesAreWeakEvidence` below carries the rest of the
+ * defence.
+ */
+const MATCH_THRESHOLD = 0.025;
 const MAX_MATCHES = 5;
+
+/**
+ * Whatever the memory says, it is a colour histogram agreeing with a colour
+ * histogram — never grounds to overrule a stage that actually looked at the
+ * picture. It reorders candidates; it does not choose one.
+ */
+export const LEARNED_MAX_BOOST = 1.18;
 
 /**
  * Foods previously confirmed on photos that look like this one.
@@ -66,7 +96,10 @@ export function confidenceBoost(id, { matches = [], priors = {} } = {}) {
   if (match) boost *= 1 + clamp(match.weight, 0, 2) * 0.28;
   const prior = priors[id] || 0;
   if (prior > 0) boost *= 1 + clamp(prior, 0, 15) * 0.02;
-  return boost;
+  // Both terms compounding reached 2.03x, which is not a nudge — it is enough
+  // to hand the answer to whatever the user happened to log most recently,
+  // whatever the picture showed.
+  return clamp(boost, 1, LEARNED_MAX_BOOST);
 }
 
 /**

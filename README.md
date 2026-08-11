@@ -201,6 +201,47 @@ możliwe do wyczyszczenia w ustawieniach:
 | `signatures` | sygnatura zdjęcia → potwierdzone danie | rozpoznawanie powtarzalnych posiłków |
 | `portions` | zwykła gramatura użytkownika | trafniejsze szacowanie porcji |
 
+### Dlaczego ta pamięć ma zaciągnięty hamulec
+
+Sygnatura to szesnaście liczb nieujemnych: dwanaście koszyków odcienia plus
+nasycenie, jasność, energia krawędzi i udział jedzenia w kadrze. Odległość
+kosinusowa między wektorami nieujemnymi mieści się w wąskim pasmie tuż nad
+zerem — próg 0,16, z którym to wyszło, brzmi ostrożnie, a nie jest. Zmierzone
+na prawdziwym kodzie:
+
+| | zakres odległości |
+|---|---|
+| ten sam posiłek, pięć ujęć (światło, kadr, balans bieli) | 0,000 – 0,058 |
+| zdjęcia wizualnie niepowiązane | od 0,028 w górę |
+
+**Zakresy się nakładają** i to jest właściwe odkrycie: żaden próg ich nie
+rozdzieli, bo brązowy kotlet i czerwone danie pomidorowe mają naprawdę podobne
+histogramy barw. Przy 0,16 czternaście procent niepowiązanych par liczyło się
+jako ten sam posiłek — dość, by jedno potwierdzone danie zaczęło wygrywać
+**każde** kolejne zdjęcie.
+
+Próg leży więc poniżej punktu, w którym niepowiązane zdjęcia zaczynają
+kolidować, kosztem gubienia powtórek zrobionych przy innym balansie bieli.
+Nierozpoznanie części prawdziwych powtórek jest znacznie mniejszą porażką niż
+nazywanie wszystkiego tym samym daniem.
+
+Reszta obrony leży w tym, ile pamięć **wolno** jej zmienić. Histogram barw
+zgadzający się z histogramem barw nie jest podstawą, żeby unieważnić etap,
+który faktycznie patrzył na zdjęcie:
+
+- mnożnik pewności ograniczony do 1,18× (oba składniki złożone sięgały 2,03×)
+- w heurystyce zapamiętane danie, które zdjęcie **też** przypomina, dostaje
+  realny podnośnik; takie, którego nie przypomina — ledwie próg wejścia
+- gdy model się wypowiedział, **model wybiera posiłek**: kandydaci znalezieni
+  wyłącznie przez heurystykę lądują poniżej najsłabszego kandydata modelu
+
+To ostatnie było osobnym błędem. Wynik heurystyki jest z definicji ograniczony
+do 0,58, a wynik modelu to prawdopodobieństwo — skalowanie heurystyki płaskim
+0,5 i przeplatanie obu list porównywało dwie różne skale. Odkąd wyniki modelu
+zaczęły nieść mnożnik pewności „czy to jedzenie", spadły na tyle, że
+dopasowanie kolorystyczne potrafiło je wyprzedzić na zdjęciu, które model
+rozpoznał pewnie.
+
 ---
 
 ## Powtarzanie posiłków

@@ -89,9 +89,18 @@ export function analyse(features, seg, ctx = {}) {
     else if (prior < 0) entry.score *= 0.85;
   }
 
-  /* 4 — memory of past corrections on similar-looking photos. */
+  /* 4 — memory of past corrections on similar-looking photos.
+
+     A remembered dish the picture also *looks* like gets a real lift, which is
+     the whole point of remembering it. One the picture does not look like gets
+     a foot in the door and nothing more: the old flat `weight * 1.8` was
+     injected regardless, and since weights run to 2.2 it outweighed the
+     appearance evidence outright — so a single confirmed meal could win photos
+     that had nothing to do with it. */
   for (const match of ctx.learnedMatches || []) {
-    bump(match.id, match.weight * 1.8);
+    const seen = scores.get(match.id);
+    if (seen) seen.score *= 1 + clamp(match.weight, 0, 2.2) * 0.35;
+    else bump(match.id, match.weight * 0.5);
   }
 
   const items = [...scores.values()].sort((a, b) => b.score - a.score);

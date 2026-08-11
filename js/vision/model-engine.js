@@ -16,10 +16,24 @@ const RUNTIME_URLS = [
   'https://unpkg.com/@huggingface/transformers@3.7.5',
 ];
 
+/**
+ * Ordered best-first *for the device*, see `modelsFor`.
+ *
+ * B/16 cuts the image into 16-pixel patches where B/32 uses 32, so it sees
+ * roughly four times as much spatial detail and is markedly more accurate —
+ * about five points of zero-shot ImageNet top-1 between them — at around four
+ * times the compute. On a GPU that is affordable and worth taking; on the
+ * WebAssembly path it is the difference between a wait and a hang, so there
+ * the smaller model leads and B/16 is only ever a fallback.
+ */
 const MODELS = [
-  { id: 'Xenova/clip-vit-base-patch32', dtype: 'q8', label: 'CLIP ViT-B/32' },
-  { id: 'Xenova/clip-vit-base-patch16', dtype: 'q8', label: 'CLIP ViT-B/16' },
+  { id: 'Xenova/clip-vit-base-patch16', dtype: 'q8', label: 'CLIP ViT-B/16', heavy: true },
+  { id: 'Xenova/clip-vit-base-patch32', dtype: 'q8', label: 'CLIP ViT-B/32', heavy: false },
 ];
+
+const modelsFor = (device) => (device === 'webgpu'
+  ? MODELS
+  : [...MODELS].sort((a, b) => Number(a.heavy) - Number(b.heavy)));
 
 /**
  * Prompt used for every candidate label — the exact food-domain template from
@@ -31,6 +45,37 @@ const MODELS = [
  * it on a phone.
  */
 const PROMPT = 'a photo of {}, a type of food';
+
+/**
+ * Subjects that are not food, scored alongside the menu.
+ *
+ * This is the difference between a classifier that can be wrong and one that
+ * cannot say no. Zero-shot classification is a softmax over exactly the labels
+ * it is handed: give it two hundred foods and nothing else, and every image on
+ * earth is a food — the probabilities are forced to add up to one across the
+ * menu. A photo of someone's knees came back "pork cutlet with potatoes, 78%"
+ * for precisely that reason, and no threshold on that number could ever have
+ * caught it, because the number was never measuring "is this food".
+ *
+ * With these in the running the question becomes answerable, so the list has
+ * to cover what a phone camera actually catches by accident: people, clothes,
+ * rooms, pets, screens, the floor. `an empty plate` and `dirty dishes` earn
+ * their place separately — those are the near misses of this app in
+ * particular, a camera pointed at the table a moment too early or too late.
+ */
+const NOT_FOOD = [
+  'a person', 'a close-up of a human face', 'hands', 'bare legs', 'feet',
+  'clothing', 'a pair of blue jeans', 'a shirt', 'shoes',
+  'a room interior', 'furniture', 'a sofa', 'a bed', 'a wooden floor', 'a wall',
+  'a cat', 'a dog',
+  'a car', 'a street', 'a building', 'a landscape', 'the sky', 'a houseplant',
+  'a computer screen', 'a phone screen', 'a page of text', 'a receipt',
+  'an empty plate', 'an empty table', 'dirty dishes in a sink',
+  'a dark blurry photo of nothing',
+];
+
+/** Negatives are not food, so they must not carry the food template. */
+const NOT_FOOD_PROMPT = 'a photo of {}';
 
 const LOAD_TIMEOUT = 45000;
 const RUN_TIMEOUT = 20000;
@@ -106,7 +151,7 @@ export function load({ caps, onProgress } = {}) {
       const device = caps?.webgpu ? 'webgpu' : 'wasm';
       let lastError = null;
 
-      for (const model of MODELS) {
+      for (const model of modelsFor(device)) {
         try {
           report('weights', 0.15, 'Pobieram wagi modelu…');
           const created = await timeout(
@@ -165,34 +210,115 @@ export function load({ caps, onProgress } = {}) {
 /* ---------------- inference ---------------- */
 
 /**
- * Classify a canvas against candidate labels.
+ * How far ahead a non-food label has to be before the photo is rejected.
+ *
+ * Deliberately above 1: the two mistakes are not equally cheap. Refusing a
+ * real dinner sends someone back to the camera for a photo that was fine,
+ * while accepting a doubtful one costs a tap on an alternative. So a negative
+ * has to beat the best food outright, not merely tie with it.
+ */
+const REJECT_MARGIN = 1.15;
+
+/**
+ * Decide whether an image is food at all, from the scores of both label sets.
+ *
+ * Split out from `classify` and exported so it can be exercised against known
+ * distributions without a model: the weights are a 50 MB download and a WebGPU
+ * context, which no test wants as a dependency.
+ *
+ * @param {{id:string,score:number}[]} foods
+ * @param {{label:string,score:number}[]} rejects
+ */
+export function foodVerdict(foods, rejects) {
+  const foodMass = foods.reduce((s, f) => s + f.score, 0);
+  const rejectMass = rejects.reduce((s, r) => s + r.score, 0);
+  const total = foodMass + rejectMass;
+
+  const bestFood = foods[0] || null;
+  const bestReject = rejects[0] || null;
+
+  // Compared at the top of each list, never as sums: there are two hundred
+  // foods against thirty negatives, so totals would hand food a seven-to-one
+  // head start that has nothing to do with the picture.
+  const isFood = !bestReject || !bestFood
+    ? !!bestFood
+    : bestFood.score * REJECT_MARGIN >= bestReject.score;
+
+  // How sure we are it is food at all, as opposed to which food it is.
+  //
+  // Read off the two tops for the same reason the verdict is: `foodMass` is
+  // inflated by there simply being two hundred food labels to thirty
+  // negatives, so it sits around 0.85 whatever the picture shows and would
+  // damp nothing. The gap between the leaders does not care how many labels
+  // stood behind each of them.
+  const top = (bestFood?.score ?? 0) + (bestReject?.score ?? 0);
+  const certainty = top > 0 ? (bestFood?.score ?? 0) / top : 0;
+
+  return {
+    isFood,
+    certainty,
+    // Kept for the diagnostics panel; not a confidence signal — see above.
+    foodShare: total > 0 ? foodMass / total : 0,
+    foodMass,
+    bestFoodScore: bestFood?.score ?? 0,
+    rejectedAs: isFood ? null : bestReject?.label ?? null,
+    rejectScore: bestReject?.score ?? 0,
+  };
+}
+
+/**
+ * Classify a canvas against the food menu *and* a set of non-food subjects.
+ *
  * @param {HTMLCanvasElement|OffscreenCanvas} canvas square, already downscaled
  * @param {{id:string,en:string}[]} candidates
- * @returns {Promise<{id:string,score:number}[]>} sorted, best first
+ * @returns {Promise<{items:{id:string,score:number}[], verdict:object}>}
+ *   `items` are renormalised across the food labels only, so a score answers
+ *   "which food" and the verdict answers "is this food"; multiplying the two
+ *   is what the UI shows as confidence.
  */
 export async function classify(canvas, candidates, { topK = 6 } = {}) {
   if (state.status !== 'ready' || !pipe) throw new Error('Model nie jest gotowy.');
-  if (!candidates?.length) return [];
+  if (!candidates?.length) return { items: [], verdict: foodVerdict([], []) };
 
   const started = performance.now();
   const byPrompt = new Map();
   const prompts = [];
+
   for (const c of candidates) {
     const prompt = PROMPT.replace('{}', c.en);
     prompts.push(prompt);
-    byPrompt.set(prompt, c.id);
+    byPrompt.set(prompt, { kind: 'food', id: c.id });
+  }
+  for (const n of NOT_FOOD) {
+    const prompt = NOT_FOOD_PROMPT.replace('{}', n);
+    prompts.push(prompt);
+    byPrompt.set(prompt, { kind: 'reject', label: n });
   }
 
   const image = await toModelInput(canvas);
   const raw = await timeout(pipe(image, prompts), RUN_TIMEOUT, 'Analiza trwała zbyt długo.');
   state.lastMs = Math.round(performance.now() - started);
 
-  const scores = (Array.isArray(raw) ? raw : [raw])
-    .map((r) => ({ id: byPrompt.get(r.label), score: r.score }))
-    .filter((r) => r.id);
+  const foods = [];
+  const rejects = [];
+  for (const r of (Array.isArray(raw) ? raw : [raw])) {
+    const meta = byPrompt.get(r.label);
+    if (!meta) continue;
+    if (meta.kind === 'food') foods.push({ id: meta.id, score: r.score });
+    else rejects.push({ label: meta.label, score: r.score });
+  }
+  foods.sort((a, b) => b.score - a.score);
+  rejects.sort((a, b) => b.score - a.score);
 
-  scores.sort((a, b) => b.score - a.score);
-  return scores.slice(0, topK);
+  const verdict = foodVerdict(foods, rejects);
+
+  // Renormalised across foods: with negatives in the pool the raw scores no
+  // longer sum to one over the menu, and downstream fusion assumes they do.
+  const items = verdict.foodMass > 0
+    ? foods.slice(0, topK).map((f) => ({ id: f.id, score: f.score / verdict.foodMass }))
+    : [];
+
+  return { items, verdict };
 }
 
 /**

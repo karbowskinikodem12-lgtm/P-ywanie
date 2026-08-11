@@ -41,6 +41,9 @@ export const ENGINE_LABELS = {
  * @property {object} photo       {thumb, display}
  * @property {Array}  signature   image descriptor for the learning memory
  * @property {string|null} warning
+ * @property {boolean} [noFood]   the model recognised the photo as not food;
+ *                                `items` is empty and there is nothing to save
+ * @property {string|null} [rejectedAs] what it looked like instead
  * @property {object} timings
  */
 
@@ -91,15 +94,26 @@ export async function analyzePhoto(file, { state, onProgress, onPartial } = {}) 
     timings: { prepare: tPrepare - t0, features: tFeatures - tPrepare, total: performance.now() - t0 },
   });
 
-  onPartial?.(partial);
-  report('proposal', 0.4, 'Mam wstępne rozpoznanie');
-
   /* ---- 4. neural upgrade, when the device can sustain it ---- */
   const caps = await probe();
   const wanted = recommendEngine(caps, settings);
+
   if (wanted !== 'model') {
+    onPartial?.(partial);
     report('done', 1, describeCaps(caps));
     return { ...partial, caps, engineReason: caps.reason || 'assist-mode' };
+  }
+
+  // The heuristic proposal exists to keep the sheet from sitting empty, which
+  // only matters while weights are downloading. With the model already loaded
+  // the verdict is a second away, and showing a colour-match guess in the
+  // meantime is worse than showing the spinner: for a photo the model is about
+  // to refuse outright, that guess is a meal the user never ate, named
+  // confidently and then snatched back.
+  const modelWarm = model.isReady();
+  if (!modelWarm) {
+    onPartial?.(partial);
+    report('proposal', 0.4, 'Mam wstępne rozpoznanie');
   }
 
   try {
@@ -122,16 +136,44 @@ export async function analyzePhoto(file, { state, onProgress, onPartial } = {}) 
     // matters — it boosts agreement in the fusion step below — it just no
     // longer gets to censor what the model is allowed to see.
     const candidates = shortlistFor(ranked, { wide: true });
-    const neural = await model.classify(image.model, candidates, { topK: 10 });
+    const { items: neural, verdict } = await model.classify(image.model, candidates, { topK: 10 });
+
+    // The model is the only stage that can tell food from not-food, so its
+    // refusal ends the analysis. Falling through to the heuristic here would
+    // defeat the point: colour and texture matching has no concept of "not
+    // food" and would cheerfully name a meal for a photo of the floor.
+    if (!verdict.isFood) {
+      report('done', 1, 'To chyba nie jedzenie');
+      return {
+        ...partial,
+        engine: 'model',
+        noFood: true,
+        rejectedAs: verdict.rejectedAs,
+        certainty: verdict.certainty,
+        items: [],
+        name: null,
+        suggestedId: null,
+        confidence: 0,
+        caps,
+        engineReason: model.state.device,
+      };
+    }
+
     if (!neural.length) throw new Error('Model nie zwrócił wyniku');
 
     // Fuse: the model decides *what*, the heuristic and the personal memory
     // adjust *how sure* we are.
+    //
+    // `n.score` is now renormalised across the food labels only, so it answers
+    // "which food". How sure we are it is food at all is a separate number,
+    // and confidence is the product — a dish that wins its menu handily still
+    // cannot be reported as certain if the picture was only marginally food.
     const fused = neural.map((n) => {
       const heur = ranked.items.find((x) => x.id === n.id);
       const boost = confidenceBoost(n.id, { matches, priors: learning.priors || {} });
       const agreement = heur ? 1 + clamp(heur.score, 0, 0.6) * 0.5 : 1;
-      return { id: n.id, score: clamp(n.score * boost * agreement, 0, 0.985), region: heur?.region ?? null };
+      const score = n.score * verdict.certainty * boost * agreement;
+      return { id: n.id, score: clamp(score, 0, 0.985), region: heur?.region ?? null };
     }).sort((a, b) => b.score - a.score);
 
     const neuralRanked = { ...ranked, items: mergeRanked(fused, ranked.items) };

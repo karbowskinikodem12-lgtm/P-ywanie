@@ -206,13 +206,33 @@ export async function analyzePhoto(file, { state, onProgress, onPartial } = {}) 
   }
 }
 
-/** Keep neural order, append heuristic-only candidates as alternatives. */
+/**
+ * Keep neural order, append heuristic-only candidates as alternatives.
+ *
+ * The two lists are not on one scale and never were: a heuristic score is
+ * capped at 0.58 by design, while a fused score is a probability the model
+ * produced. Scaling the heuristic by a flat 0.5 and interleaving them was
+ * always comparing apples to pears — and once fused scores began carrying the
+ * food/not-food certainty factor they dropped far enough that a colour match
+ * could outrank the model on a photo the model had confidently identified.
+ * That is how one confirmed dish came to win every picture.
+ *
+ * So when the model has spoken, the model picks the meal. Everything the
+ * heuristic found on its own lands strictly below the model's own weakest
+ * candidate, keeping its order so it still serves as one-tap alternatives.
+ */
 function mergeRanked(fused, heuristicItems) {
   const seen = new Set(fused.map((f) => f.id));
-  const extras = heuristicItems
-    .filter((h) => !seen.has(h.id))
-    .map((h) => ({ ...h, score: h.score * 0.5 }));
-  return [...fused, ...extras];
+  const extras = heuristicItems.filter((h) => !seen.has(h.id));
+  if (!extras.length) return [...fused];
+
+  const floor = fused.length ? Math.min(...fused.map((f) => f.score)) : 1;
+  const ceiling = floor * 0.9;
+  const top = extras[0].score || 1;
+  return [
+    ...fused,
+    ...extras.map((h) => ({ ...h, score: (h.score / top) * ceiling })),
+  ];
 }
 
 /* ---------------- result assembly ---------------- */

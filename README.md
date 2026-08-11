@@ -356,6 +356,19 @@ zaparkowany w `waiting`, a `updatefound` nie odpali się dla niego drugi raz.
 Aplikacja sprawdza więc `waiting` także na starcie, inaczej użytkownik mógłby
 tkwić na starej wersji, mając nową tuż obok.
 
+Aktualizacja **wchodzi sama**, jeśli nie ma czego przerwać. Wcześniej zawsze
+czekała na dotknięcie, w imię zasady, że wersja nie może się podmienić w trakcie
+edycji — ale ta zasada dotyczy dokładnie jednej sytuacji, otwartego panelu z
+komponowanym posiłkiem, a dotknięcia żądano we wszystkich pozostałych. Tak
+poprawka potrafi leżeć w `main` godzinę, podczas gdy telefon spokojnie serwuje
+starą aplikację, a pytanie „czy to już naprawione” przestaje mieć odpowiedź.
+Warunek jest więc sprawdzany, nie zakładany: `sheet.isOpen()` decyduje, czy
+podmienić po cichu, czy zaproponować „Odśwież”.
+
+Jest tu jedno ograniczenie warte zapisania: logika podmiany żyje w `app.js`, więc
+**działa dopiero od wersji, która ją zawiera**. Przejście na nią wymaga jeszcze
+starej ścieżki z dotknięciem; każde kolejne wdrożenie idzie już samo.
+
 ---
 
 ## Dostępność

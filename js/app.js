@@ -8,7 +8,7 @@ import {
 } from './core/utils.js';
 import * as store from './core/store.js';
 import * as db from './core/db.js';
-import { initSheet, open as openSheet, close as closeSheet } from './ui/sheet.js';
+import { initSheet, open as openSheet, close as closeSheet, isOpen as isSheetOpen } from './ui/sheet.js';
 import { initToast, toast, toastOk, toastErr } from './ui/toast.js';
 import { hydrateThumbs } from './ui/thumbs.js';
 import { computeTargets } from './domain/targets.js';
@@ -269,8 +269,25 @@ async function registerSW() {
   try {
     const reg = await navigator.serviceWorker.register('sw.js', { scope: './' });
 
-    const offerUpdate = (sw) => {
+    /**
+     * Take an update, or offer it if now is a bad moment.
+     *
+     * The worker used to always wait for a tap, on the grounds that a version
+     * must not swap itself in mid-edit. That reasoning holds for exactly one
+     * situation — a sheet open with a meal being composed — and the tap was
+     * being demanded in every other one too, which is how a fix can sit in
+     * `main` for an hour while the phone quietly serves the old app and
+     * "is it fixed?" becomes unanswerable.
+     *
+     * So the condition is checked instead of assumed: nothing open means
+     * nothing to lose, and the update applies on its own.
+     */
+    const applyOrOffer = (sw) => {
       if (!sw) return;
+      if (!isSheetOpen()) {
+        sw.postMessage({ type: 'SKIP_WAITING' });   // controllerchange reloads
+        return;
+      }
       toast('Dostępna nowa wersja', {
         duration: 8000,
         actionLabel: 'Odśwież',
@@ -282,12 +299,12 @@ async function registerSW() {
     // parked in `waiting`, and `updatefound` will never fire for it again.
     // Without this the user could sit on the old version indefinitely, never
     // being offered the update that is sitting right there.
-    if (reg.waiting && navigator.serviceWorker.controller) offerUpdate(reg.waiting);
+    if (reg.waiting && navigator.serviceWorker.controller) applyOrOffer(reg.waiting);
 
     reg.addEventListener('updatefound', () => {
       const sw = reg.installing;
       sw?.addEventListener('statechange', () => {
-        if (sw.state === 'installed' && navigator.serviceWorker.controller) offerUpdate(sw);
+        if (sw.state === 'installed' && navigator.serviceWorker.controller) applyOrOffer(sw);
       });
     });
 

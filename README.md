@@ -119,6 +119,59 @@ zdjęcie ─► dekodowanie i skalowanie      (~40 ms)
    bazy produktów tej aplikacji**, więc model nie może zwrócić czegoś, czego nie
    umiemy przeliczyć na wartości odżywcze. Dodanie produktu do bazy automatycznie
    uczy o nim rozpoznawanie — bez trenowania czegokolwiek.
+   Na WebGPU pierwszy w kolejce jest **ViT-B/16**, na procesorze **ViT-B/32**:
+   B/16 tnie obraz na kafelki 16-pikselowe zamiast 32, więc widzi czterokrotnie
+   więcej szczegółu przestrzennego i jest wyraźnie trafniejszy — ok. pięciu
+   punktów zero-shot top-1 różnicy — kosztem mniej więcej czterokrotnie
+   większego rachunku. Na GPU to opłacalne, na WASM byłaby to różnica między
+   czekaniem a zawieszeniem.
+
+### Kiedy na zdjęciu nie ma jedzenia
+
+Klasyfikacja zero-shot to softmax **dokładnie po tych etykietach, które
+dostanie**. Poda się jej dwieście produktów spożywczych i nic poza tym — i każde
+zdjęcie na świecie jest jedzeniem, bo prawdopodobieństwa muszą zsumować się do
+jedynki w obrębie menu. Zdjęcie czyichś kolan wracało jako „Schabowy z
+ziemniakami, 78%" właśnie dlatego i **żaden próg na tej liczbie nigdy by tego nie
+wyłapał**, bo ta liczba nigdy nie mierzyła „czy to jedzenie".
+
+Razem z menu punktowany jest więc zestaw etykiet **nie-jedzenia**: ludzie,
+ubrania, wnętrza, zwierzęta, ekrany, podłoga — plus `pusty talerz` i `brudne
+naczynia`, czyli bliskie pudła akurat tej aplikacji, aparat wycelowany w stół
+chwilę za wcześnie albo za późno. Dopiero wtedy pytanie ma odpowiedź.
+
+Dwie liczby są czytane **z czubków obu list, nigdy z sum**. Etykiet jedzenia jest
+dwieście, negatywnych trzydzieści, więc suma dawałaby jedzeniu siedmiokrotną
+przewagę wynikającą wyłącznie z liczebności, a nie ze zdjęcia:
+
+| liczba | co mówi | jak liczona |
+|---|---|---|
+| werdykt | czy to w ogóle jedzenie | najlepsze jedzenie × 1,15 ≥ najlepszy negatyw |
+| `certainty` | jak bardzo to jedzenie | najlepsze jedzenie / (najlepsze jedzenie + najlepszy negatyw) |
+| wynik pozycji | **które** jedzenie | renormalizowany w obrębie samych produktów |
+
+Pewność pokazywana w interfejsie to iloczyn dwóch ostatnich: danie może pewnie
+wygrać swoje menu i **nadal** nie zostać zaraportowane jako pewne, jeśli samo
+zdjęcie było ledwie jedzeniem.
+
+Margines 1,15 jest celowo powyżej jedynki, bo obie pomyłki nie kosztują tyle
+samo: odrzucenie prawdziwej kolacji odsyła człowieka po zdjęcie, które było
+dobre, a przyjęcie wątpliwej kosztuje jedno dotknięcie w alternatywę. Negatyw
+musi więc wygrać wyraźnie, nie remisować.
+
+**Czego to nie naprawia.** Tylko model potrafi odmówić. Tryb wspomagany to
+dopasowanie barwy i tekstury — nie ma pojęcia „nie jedzenie" i przy zdjęciu
+podłogi nadal zaproponuje posiłek. Dlatego jego pewność jest z góry ograniczona
+do 58%, a plakietka mówi wprost „Tryb wspomagany". Odmowa modelu **kończy**
+analizę i nie schodzi na heurystykę — zejście zniweczyłoby cały sens.
+
+Jeśli model jest już załadowany, wstępna propozycja heurystyki **nie jest
+pokazywana**: werdykt jest o sekundę, a mignięcie zgadniętym daniem przy
+zdjęciu, które za chwilę zostanie odrzucone, to pokazanie posiłku, którego nikt
+nie jadł. Propozycja wraca tylko wtedy, gdy wagi się jeszcze pobierają i panel
+inaczej stałby pusty.
+
+---
 
 Jeśli urządzenie nie ma akceleracji, jest offline przed pierwszym pobraniem
 modelu albo użytkownik oszczędza transfer — aplikacja zostaje na trybie

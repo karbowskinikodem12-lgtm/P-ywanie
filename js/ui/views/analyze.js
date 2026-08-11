@@ -81,6 +81,13 @@ export async function handleFile(ctx, file) {
       },
     });
 
+    // The model can now decline, and a decline is a final answer rather than a
+    // failure — nothing is saved and the editor never opens.
+    if (result.noFood) {
+      renderNoFood(result);
+      return;
+    }
+
     applyResult(result, { partial: false });
     renderEditor();
 
@@ -96,6 +103,55 @@ export async function handleFile(ctx, file) {
       <button class="btn btn-quiet btn-block" data-action="meal:search">Wpisz ręcznie</button>
       <button class="btn btn-quiet btn-block" data-action="sheet:close">Anuluj</button>`);
   }
+}
+
+/** Plain-language names for what the model saw instead of a meal. */
+const NOT_FOOD_PL = {
+  'a person': 'osobę', 'a close-up of a human face': 'twarz', hands: 'dłonie',
+  'bare legs': 'nogi', feet: 'stopy', clothing: 'ubranie',
+  'a pair of blue jeans': 'dżinsy', 'a shirt': 'koszulkę', shoes: 'buty',
+  'a room interior': 'wnętrze pokoju', furniture: 'meble', 'a sofa': 'kanapę',
+  'a bed': 'łóżko', 'a wooden floor': 'podłogę', 'a wall': 'ścianę',
+  'a cat': 'kota', 'a dog': 'psa', 'a car': 'samochód', 'a street': 'ulicę',
+  'a building': 'budynek', 'a landscape': 'krajobraz', 'the sky': 'niebo',
+  'a houseplant': 'roślinę', 'a computer screen': 'ekran komputera',
+  'a phone screen': 'ekran telefonu', 'a page of text': 'tekst',
+  'a receipt': 'paragon', 'an empty plate': 'pusty talerz',
+  'an empty table': 'pusty stół', 'dirty dishes in a sink': 'brudne naczynia',
+  'a dark blurry photo of nothing': 'ciemne, rozmyte zdjęcie',
+};
+
+/**
+ * The honest answer when the photo is not a meal.
+ *
+ * No guess, no confidence badge, nothing pre-filled: proposing a dish here is
+ * exactly the behaviour being fixed. The photo is still shown, because seeing
+ * what was actually captured is usually all the explanation anyone needs.
+ */
+function renderNoFood(result) {
+  session = null;
+  const saw = NOT_FOOD_PL[result.rejectedAs] || null;
+
+  sheet.open(`
+    <div class="grab"></div>
+    ${result.photo?.display ? `
+      <div class="shot-wrap">
+        <img class="shot" src="${esc(result.photo.display)}" alt="Zrobione zdjęcie">
+      </div>` : ''}
+    <h2>Nie widzę tu jedzenia</h2>
+    <p class="sheet-sub">
+      ${saw ? `To wygląda raczej na ${esc(saw)}. ` : ''}Nie zgadywałem, żeby nie
+      dopisać Ci posiłku, którego nie było.
+    </p>
+    <div class="callout callout-info" style="margin-bottom:14px">
+      ${icon('bulb', { size: 18 })}
+      <div>Najlepiej działa kadr z góry, na cały talerz, przy dziennym świetle.</div>
+    </div>
+    <div class="sheet-actions">
+      <button class="btn btn-primary" data-action="capture:photo">Zrób nowe zdjęcie</button>
+      <button class="btn btn-quiet btn-block" data-action="meal:search">Wpisz ręcznie</button>
+      <button class="btn btn-quiet btn-block" data-action="sheet:close">Anuluj</button>
+    </div>`, { label: 'Nie rozpoznano jedzenia' });
 }
 
 function analyzingHtml(text) {

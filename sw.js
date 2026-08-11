@@ -23,7 +23,7 @@
    Bump CACHE_VERSION on every release.
    ========================================================================== */
 
-const CACHE_VERSION = 'tor-v4';
+const CACHE_VERSION = 'tor-v5';
 const SHELL_CACHE = `${CACHE_VERSION}-shell`;
 const RUNTIME_CACHE = `${CACHE_VERSION}-runtime`;
 const MODEL_CACHE = 'tor-models-v1';
@@ -42,6 +42,7 @@ const SHELL = [
   './js/core/utils.js',
   './js/core/db.js',
   './js/core/store.js',
+  './js/core/build.js',
   './js/data/nutrients.js',
   './js/data/foods.js',
   './js/data/dishes.js',
@@ -87,9 +88,10 @@ self.addEventListener('install', (event) => {
     await Promise.all(SHELL.map((url) => cache.add(new Request(url, { cache: 'reload' })).catch((e) => {
       console.warn('[sw] skipped', url, e.message);
     })));
-    // No skipWaiting here on purpose: a new version must not swap itself in
-    // while the user is mid-edit. The page offers a "refresh" toast and sends
-    // SKIP_WAITING only when they accept.
+    // No skipWaiting here on purpose. The page decides, because only the page
+    // knows whether now is a bad moment: with a sheet open it offers a
+    // "refresh" toast, and otherwise it sends SKIP_WAITING straight away —
+    // see `applyOrOffer` in app.js.
   })());
 });
 
